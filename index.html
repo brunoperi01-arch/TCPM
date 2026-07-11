@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TC Pennes Mirabeau — Pré-inscriptions saison 2027</title>
+<meta name="description" content="Le club ferme cet été mais les inscriptions continuent ! Pré-inscrivez-vous pour la saison 2027 au Tennis Club des Pennes Mirabeau.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy: #0b3b60;
+    --navy-dark: #082a45;
+    --cyan: #29b6d8;
+    --yellow: #f4c430;
+    --green: #4caf6b;
+    --magenta: #a8407a;
+    --ink: #142433;
+    --paper: #f7f9fb;
+    --white: #ffffff;
+    --line: #dde5ec;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    font-family:'Inter', sans-serif;
+    color:var(--ink);
+    background:var(--paper);
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3{ font-family:'Montserrat', sans-serif; }
+  img{max-width:100%; display:block;}
+  a{color:inherit;}
+
+  /* ---------- Header ---------- */
+  header{
+    background:var(--navy);
+    color:var(--white);
+    padding:16px 20px;
+    display:flex;
+    align-items:center;
+    gap:14px;
+    position:sticky;
+    top:0;
+    z-index:20;
+    box-shadow:0 2px 12px rgba(0,0,0,.15);
+  }
+  .logo-badge{
+    width:48px; height:48px;
+    border-radius:50%;
+    background:var(--white);
+    display:flex; align-items:center; justify-content:center;
+    font-family:'Montserrat', sans-serif;
+    font-weight:900;
+    color:var(--navy);
+    font-size:13px;
+    flex-shrink:0;
+    border:2px solid var(--cyan);
+  }
+  header .club-name{
+    font-weight:800;
+    font-size:15px;
+    letter-spacing:.02em;
+    text-transform:uppercase;
+  }
+  header .club-name span{
+    display:block;
+    font-family:'Inter',sans-serif;
+    font-weight:500;
+    font-size:11px;
+    text-transform:none;
+    color:#b7d3e6;
+    letter-spacing:0;
+  }
+
+  /* ---------- Hero ---------- */
+  .hero{
+    background:linear-gradient(160deg, var(--navy) 0%, var(--navy-dark) 60%, #061c30 100%);
+    color:var(--white);
+    padding:48px 20px 56px;
+    text-align:center;
+    position:relative;
+    overflow:hidden;
+  }
+  .hero::after{
+    content:"🎾";
+    position:absolute;
+    font-size:220px;
+    opacity:.06;
+    right:-40px;
+    top:-40px;
+    transform:rotate(15deg);
+  }
+  .hero-tag{
+    display:inline-block;
+    background:var(--yellow);
+    color:var(--navy-dark);
+    font-weight:700;
+    font-size:13px;
+    padding:6px 14px;
+    border-radius:999px;
+    margin-bottom:18px;
+    letter-spacing:.02em;
+  }
+  .hero h1{
+    font-size:clamp(26px, 6vw, 42px);
+    font-weight:900;
+    line-height:1.15;
+    max-width:680px;
+    margin:0 auto 16px;
+  }
+  .hero h1 em{
+    font-style:normal;
+    color:var(--yellow);
+  }
+  .hero p.sub{
+    font-size:16px;
+    color:#c9dcea;
+    max-width:520px;
+    margin:0 auto 28px;
+  }
+  .hero .cta-row{
+    display:flex;
+    gap:12px;
+    justify-content:center;
+    flex-wrap:wrap;
+  }
+  .btn{
+    display:inline-block;
+    padding:14px 28px;
+    border-radius:10px;
+    font-weight:700;
+    font-size:15px;
+    text-decoration:none;
+    cursor:pointer;
+    border:none;
+    transition:transform .15s ease, box-shadow .15s ease;
+  }
+  .btn:active{transform:scale(.97);}
+  .btn-primary{
+    background:var(--yellow);
+    color:var(--navy-dark);
+    box-shadow:0 6px 20px rgba(244,196,48,.35);
+  }
+  .btn-primary:hover{ box-shadow:0 8px 26px rgba(244,196,48,.5); }
+  .btn-ghost{
+    background:rgba(255,255,255,.08);
+    color:var(--white);
+    border:1px solid rgba(255,255,255,.35);
+  }
+
+  /* closure banner */
+  .closure-banner{
+    background:var(--yellow);
+    color:var(--navy-dark);
+    text-align:center;
+    padding:12px 16px;
+    font-weight:700;
+    font-size:14px;
+    letter-spacing:.01em;
+  }
+
+  /* ---------- Sections ---------- */
+  section{ padding:56px 20px; max-width:920px; margin:0 auto; }
+  .section-eyebrow{
+    color:var(--cyan);
+    font-weight:700;
+    font-size:12px;
+    text-transform:uppercase;
+    letter-spacing:.12em;
+    margin-bottom:8px;
+    text-align:center;
+  }
+  .section-title{
+    font-size:clamp(22px,4vw,30px);
+    font-weight:800;
+    text-align:center;
+    color:var(--navy-dark);
+    margin-bottom:12px;
+  }
+  .section-desc{
+    text-align:center;
+    color:#4a5c6b;
+    max-width:560px;
+    margin:0 auto 36px;
+    font-size:15px;
+  }
+
+  /* ---------- Tarifs table ---------- */
+  .tarifs-wrap{
+    background:var(--white);
+    border-radius:16px;
+    overflow:hidden;
+    box-shadow:0 4px 24px rgba(11,59,96,.08);
+    border:1px solid var(--line);
+  }
+  table{ width:100%; border-collapse:collapse; font-size:14px; }
+  thead th{
+    background:var(--navy);
+    color:var(--white);
+    padding:14px 12px;
+    text-align:left;
+    font-weight:700;
+    font-size:12.5px;
+    text-transform:uppercase;
+    letter-spacing:.04em;
+  }
+  thead th:not(:first-child){ text-align:center; }
+  tbody td{
+    padding:13px 12px;
+    border-bottom:1px solid var(--line);
+  }
+  tbody td:not(:first-child){ text-align:center; font-weight:600; }
+  tbody tr:last-child td{ border-bottom:none; }
+  .formule-name{ font-weight:700; color:var(--navy-dark); }
+  .formule-sub{ display:block; font-weight:400; font-size:11.5px; color:#7a8894; }
+  tr.group-jeune .formule-name{ color:var(--navy); }
+  tr.group-adulte td{ background:#fffbea; }
+  tr.group-jeune td{ background:#eef6fb; }
+  .tarifs-note{
+    padding:16px 18px;
+    font-size:12.5px;
+    color:#5a6b78;
+    background:#f2f6f9;
+    border-top:1px solid var(--line);
+  }
+  .reduc-box{
+    margin-top:20px;
+    background:var(--white);
+    border-radius:14px;
+    border:1px solid var(--line);
+    padding:20px 22px;
+    box-shadow:0 4px 24px rgba(11,59,96,.06);
+  }
+  .reduc-box h3{ font-size:15px; color:var(--navy-dark); margin-bottom:10px; }
+  .reduc-box ul{ list-style:none; display:grid; gap:6px; font-size:13.5px; color:#4a5c6b;}
+  .reduc-box li strong{ color:var(--magenta); }
+
+  /* ---------- Form ---------- */
+  .form-wrap{
+    background:var(--white);
+    border-radius:18px;
+    border:1px solid var(--line);
+    box-shadow:0 8px 32px rgba(11,59,96,.1);
+    padding:28px 22px;
+  }
+  .form-grid{ display:grid; gap:16px; }
+  @media(min-width:600px){
+    .form-grid.two-col{ grid-template-columns:1fr 1fr; }
+  }
+  label{
+    display:block;
+    font-size:13px;
+    font-weight:600;
+    color:var(--navy-dark);
+    margin-bottom:6px;
+  }
+  input, select, textarea{
+    width:100%;
+    padding:12px 14px;
+    border-radius:10px;
+    border:1.5px solid var(--line);
+    font-size:15px;
+    font-family:'Inter',sans-serif;
+    color:var(--ink);
+    background:#fbfcfd;
+  }
+  input:focus, select:focus, textarea:focus{
+    outline:none;
+    border-color:var(--cyan);
+    box-shadow:0 0 0 3px rgba(41,182,216,.15);
+  }
+  textarea{ resize:vertical; min-height:80px; }
+  .required{ color:var(--magenta); }
+  .field-hint{
+    font-size:12px;
+    color:#7a8894;
+    margin:-2px 0 10px;
+  }
+  .checkbox-grid{
+    display:grid;
+    grid-template-columns:1fr;
+    gap:8px;
+  }
+  @media(min-width:600px){
+    .checkbox-grid{ grid-template-columns:1fr 1fr; }
+    .checkbox-grid.two-col-chk{ grid-template-columns:1fr 1fr; }
+  }
+  .chk{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    font-size:13.5px;
+    font-weight:500;
+    color:var(--ink);
+    background:#fbfcfd;
+    border:1.5px solid var(--line);
+    border-radius:10px;
+    padding:10px 12px;
+    cursor:pointer;
+    transition:border-color .15s ease, background .15s ease;
+  }
+  .chk:has(input:checked){
+    border-color:var(--cyan);
+    background:#eaf7fb;
+  }
+  .chk input{ width:16px; height:16px; accent-color:var(--navy); flex-shrink:0; }
+  .chk span{ margin-left:auto; font-size:11.5px; color:#7a8894; font-weight:400; white-space:nowrap; }
+  .field-error{
+    display:none;
+    color:var(--magenta);
+    font-size:12px;
+    margin-top:6px;
+  }
+  .field-error.show{ display:block; }
+  .person-card{
+    background:#fbfcfd;
+    border:1.5px solid var(--line);
+    border-radius:14px;
+    padding:18px 16px;
+  }
+  .person-card h4{
+    font-size:13px;
+    font-weight:700;
+    color:var(--white);
+    background:var(--navy);
+    display:inline-block;
+    padding:4px 12px;
+    border-radius:999px;
+    margin-bottom:14px;
+  }
+  .form-footer{
+    margin-top:22px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:12px;
+  }
+  .form-footer .btn-primary{ width:100%; text-align:center; }
+  .form-footer small{ color:#7a8894; font-size:12px; text-align:center; }
+  #confirm-msg{
+    display:none;
+    background:#e8f7ee;
+    border:1px solid #b6e6c7;
+    color:#1f7a41;
+    padding:14px 16px;
+    border-radius:10px;
+    font-size:13.5px;
+    text-align:center;
+    margin-top:16px;
+  }
+
+  /* ---------- Infos pratiques ---------- */
+  .info-grid{
+    display:grid;
+    gap:16px;
+    grid-template-columns:1fr;
+  }
+  @media(min-width:640px){ .info-grid{ grid-template-columns:1fr 1fr; } }
+  .info-card{
+    background:var(--white);
+    border-radius:14px;
+    border:1px solid var(--line);
+    padding:20px;
+  }
+  .info-card .emoji{ font-size:22px; margin-bottom:8px; display:block; }
+  .info-card h4{ font-size:14.5px; color:var(--navy-dark); margin-bottom:6px; }
+  .info-card p{ font-size:13.5px; color:#5a6b78; }
+
+  footer{
+    background:var(--navy-dark);
+    color:#a9c2d4;
+    text-align:center;
+    padding:32px 20px;
+    font-size:13px;
+  }
+  footer .club-title{
+    color:var(--white);
+    font-weight:800;
+    font-family:'Montserrat',sans-serif;
+    margin-bottom:6px;
+    font-size:15px;
+  }
+  footer a{ color:var(--cyan); text-decoration:none; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-badge">TC<br>PM</div>
+  <div class="club-name">Tennis Club des Pennes Mirabeau<span>Les Pennes-Mirabeau · FFT</span></div>
+</header>
+
+<div class="closure-banner">
+  🏖️ Le club est fermé cet été — mais les inscriptions saison 2027 continuent en ligne !
+</div>
+
+<div class="hero">
+  <span class="hero-tag">🎾 Pré-inscriptions ouvertes</span>
+  <h1>On garde le court <em>chaud</em> même en votre absence 😄</h1>
+  <p class="sub">Réservez votre place pour la rentrée sportive avant que les créneaux ne se remplissent. Deux minutes suffisent, on s'occupe du reste.</p>
+  <div class="cta-row">
+    <a href="#preinscription" class="btn btn-primary">Je me pré-inscris 🙋</a>
+    <a href="#tarifs" class="btn btn-ghost">Voir les tarifs</a>
+  </div>
+</div>
+
+<section id="tarifs">
+  <div class="section-eyebrow">Saison 2027</div>
+  <h2 class="section-title">Nos formules & tarifs</h2>
+  <p class="section-desc">Cotisation club + licence FFT incluses. Les tarifs renouvellement récompensent la fidélité de nos adhérents.</p>
+
+  <div class="tarifs-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Formule</th>
+          <th>Nouvelle adhésion</th>
+          <th>Renouvellement</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="group-adulte">
+          <td><span class="formule-name">Adulte</span><span class="formule-sub">Cotisation club + licence FFT</span></td>
+          <td>215 €</td><td>190 €</td>
+        </tr>
+        <tr class="group-adulte">
+          <td><span class="formule-name">Couple</span></td>
+          <td>195 €</td><td>170 €</td>
+        </tr>
+        <tr class="group-adulte">
+          <td><span class="formule-name">Retraité</span></td>
+          <td>130 €</td><td>130 €</td>
+        </tr>
+        <tr class="group-adulte">
+          <td><span class="formule-name">Étudiant</span></td>
+          <td>120 €</td><td>120 €</td>
+        </tr>
+        <tr class="group-adulte">
+          <td><span class="formule-name">2ème série</span></td>
+          <td>80 €</td><td>80 €</td>
+        </tr>
+        <tr class="group-jeune">
+          <td><span class="formule-name">Jeune</span><span class="formule-sub">1h30 × 32 semaines</span></td>
+          <td>345 €</td><td>300 €</td>
+        </tr>
+        <tr class="group-jeune">
+          <td><span class="formule-name">Compétition jeune</span></td>
+          <td>520 €</td><td>450 €</td>
+        </tr>
+        <tr class="group-jeune">
+          <td><span class="formule-name">Mini-tennis</span><span class="formule-sub">1h30 × 32 semaines</span></td>
+          <td>220 €</td><td>200 €</td>
+        </tr>
+        <tr class="group-jeune">
+          <td><span class="formule-name">Cours collectifs adultes</span><span class="formule-sub">1h30 × 32 semaines</span></td>
+          <td>290 €</td><td>230 €</td>
+        </tr>
+        <tr class="group-jeune">
+          <td><span class="formule-name">Cours collectifs adultes</span><span class="formule-sub">2 × 1h30 × 32 semaines</span></td>
+          <td>—</td><td>350 €</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="tarifs-note">💡 Le montant définitif et les créneaux sont confirmés par le club après votre pré-inscription.</div>
+  </div>
+
+  <div class="reduc-box">
+    <h3>👨‍👩‍👧‍👦 Réduction famille</h3>
+    <ul>
+      <li>800 € à 1000 € de cotisations cumulées → <strong>-10 %</strong></li>
+      <li>1001 € à 1400 € → <strong>-15 %</strong></li>
+      <li>1401 € et plus → <strong>-20 %</strong></li>
+    </ul>
+  </div>
+</section>
+
+<section id="preinscription">
+  <div class="section-eyebrow">2 minutes chrono</div>
+  <h2 class="section-title">Pré-inscription saison 2027</h2>
+  <p class="section-desc">Remplissez ce formulaire pour réserver votre place. Le club vous recontactera à la réouverture pour finaliser l'inscription et le paiement.</p>
+
+  <div class="form-wrap">
+    <form id="preinscription-form">
+      <div class="form-grid two-col">
+        <div>
+          <label for="telephone">Téléphone <span class="required">*</span></label>
+          <input type="tel" id="telephone" name="telephone" placeholder="06 12 34 56 78" required>
+        </div>
+        <div>
+          <label for="email">Email <span class="required">*</span></label>
+          <input type="email" id="email" name="email" required>
+        </div>
+      </div>
+
+      <div class="form-grid" style="margin-top:16px;">
+        <div>
+          <label for="nb-personnes">Nombre de personnes à inscrire <span class="required">*</span></label>
+          <p class="field-hint">Inscription familiale ? Augmentez ce nombre : un mini-formulaire s'ajoute pour chaque personne.</p>
+          <input type="number" id="nb-personnes" name="nb_personnes" min="1" max="8" value="1" style="max-width:120px;">
+        </div>
+      </div>
+
+      <div id="persons-container" style="margin-top:20px; display:grid; gap:16px;"></div>
+
+      <div class="form-grid" style="margin-top:16px;">
+        <div>
+          <label for="message">Créneaux souhaités / remarques (facultatif)</label>
+          <textarea id="message" name="message" placeholder="Ex : plutôt le mercredi après-midi, avec mon enfant de 8 ans…"></textarea>
+        </div>
+      </div>
+
+      <div class="form-footer">
+        <button type="submit" class="btn btn-primary">Envoyer ma pré-inscription 📩</button>
+        <small>En envoyant ce formulaire, votre messagerie s'ouvre avec un email pré-rempli à destination du club. Aucune donnée n'est stockée ailleurs.</small>
+      </div>
+      <div id="confirm-msg">✅ Votre messagerie va s'ouvrir avec les informations pré-remplies. Il ne vous reste plus qu'à cliquer sur "Envoyer" !</div>
+    </form>
+  </div>
+</section>
+
+<section>
+  <div class="section-eyebrow">En pratique</div>
+  <h2 class="section-title">Ce qu'il faut savoir</h2>
+  <div class="info-grid">
+    <div class="info-card">
+      <span class="emoji">🔒</span>
+      <h4>Accès aux courts</h4>
+      <p>Réservé aux adhérents. 3 venues avec un invité par saison, au-delà location possible à 10€/heure.</p>
+    </div>
+    <div class="info-card">
+      <span class="emoji">💳</span>
+      <h4>Moyens de paiement</h4>
+      <p>Espèces, chèques (10 max, 33€ min), virement, carte c'jeune ou pass sport.</p>
+    </div>
+    <div class="info-card">
+      <span class="emoji">📸</span>
+      <h4>Droit à l'image</h4>
+      <p>Un accord vous sera demandé lors de la finalisation de l'inscription (usage club et/ou réseaux sociaux).</p>
+    </div>
+    <div class="info-card">
+      <span class="emoji">↩️</span>
+      <h4>Remboursement</h4>
+      <p>Aucun remboursement n'est effectué en cours d'année, sauf disposition exceptionnelle du club.</p>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="club-title">🎾 Tennis Club des Pennes Mirabeau</div>
+  <p><a href="mailto:tcpm13170@gmail.com">tcpm13170@gmail.com</a> · 07 68 68 19 42</p>
+  <p style="margin-top:10px;">© 2026 TCPM — Site provisoire de pré-inscription estivale</p>
+</footer>
+
+<script>
+const FORMULES = [
+  {v:'Adulte', label:'Adulte', prix:'215€ / 190€'},
+  {v:'Couple', label:'Couple', prix:'195€ / 170€'},
+  {v:'Retraité', label:'Retraité', prix:'130€'},
+  {v:'Étudiant', label:'Étudiant', prix:'120€'},
+  {v:'2ème série', label:'2ème série', prix:'80€'},
+  {v:'Jeune', label:'Jeune', prix:'345€ / 300€'},
+  {v:'Compétition jeune', label:'Compétition jeune', prix:'520€ / 450€'},
+  {v:'Mini-tennis', label:'Mini-tennis', prix:'220€ / 200€'},
+  {v:'Cours collectifs adultes (1x)', label:'Cours collectifs adultes 1×1h30', prix:'290€ / 230€'},
+  {v:'Cours collectifs adultes (2x)', label:'Cours collectifs adultes 2×1h30', prix:'350€'},
+  {v:'Je ne sais pas encore', label:'Je ne sais pas encore', prix:''}
+];
+
+const container = document.getElementById('persons-container');
+const nbInput = document.getElementById('nb-personnes');
+
+function readExisting(){
+  const existing = [];
+  container.querySelectorAll('.person-card').forEach(card => {
+    existing.push({
+      nom: card.querySelector('[data-field="nom"]').value,
+      prenom: card.querySelector('[data-field="prenom"]').value,
+      naissance: card.querySelector('[data-field="naissance"]').value,
+      statut: card.querySelector('[data-field="statut"]').value,
+      formules: Array.from(card.querySelectorAll('input[type="checkbox"]:checked')).map(c => c.value)
+    });
+  });
+  return existing;
+}
+
+function buildPersonCard(index, data){
+  const card = document.createElement('div');
+  card.className = 'person-card';
+  card.dataset.index = index;
+
+  const formuleOptions = FORMULES.map(f =>
+    `<label class="chk"><input type="checkbox" value="${f.v}" ${data.formules && data.formules.includes(f.v) ? 'checked' : ''}> ${f.label}${f.prix ? ` <span>${f.prix}</span>` : ''}</label>`
+  ).join('');
+
+  card.innerHTML = `
+    <h4>Personne ${index + 1}</h4>
+    <div class="form-grid two-col">
+      <div>
+        <label>Nom <span class="required">*</span></label>
+        <input type="text" data-field="nom" required value="${data.nom || ''}">
+      </div>
+      <div>
+        <label>Prénom <span class="required">*</span></label>
+        <input type="text" data-field="prenom" required value="${data.prenom || ''}">
+      </div>
+    </div>
+    <div class="form-grid two-col" style="margin-top:14px;">
+      <div>
+        <label>Date de naissance <span class="required">*</span></label>
+        <input type="date" data-field="naissance" required value="${data.naissance || ''}">
+      </div>
+      <div>
+        <label>Type d'inscription <span class="required">*</span></label>
+        <select data-field="statut" required>
+          <option value="" ${!data.statut ? 'selected' : ''} disabled>Choisir…</option>
+          <option value="Nouvelle adhésion" ${data.statut === 'Nouvelle adhésion' ? 'selected' : ''}>Nouvelle adhésion</option>
+          <option value="Renouvellement" ${data.statut === 'Renouvellement' ? 'selected' : ''}>Renouvellement</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-grid" style="margin-top:14px;">
+      <div>
+        <label>Formule(s) souhaitée(s) <span class="required">*</span></label>
+        <div class="checkbox-grid">${formuleOptions}</div>
+        <small class="field-error formule-error">Sélectionnez au moins une formule pour cette personne.</small>
+      </div>
+    </div>
+  `;
+  return card;
+}
+
+function renderPersons(){
+  const n = Math.max(1, Math.min(8, parseInt(nbInput.value, 10) || 1));
+  nbInput.value = n;
+  const existing = readExisting();
+  container.innerHTML = '';
+  for (let i = 0; i < n; i++){
+    container.appendChild(buildPersonCard(i, existing[i] || {}));
+  }
+}
+
+nbInput.addEventListener('change', renderPersons);
+nbInput.addEventListener('input', renderPersons);
+renderPersons();
+
+document.getElementById('preinscription-form').addEventListener('submit', function(e){
+  e.preventDefault();
+
+  const cards = Array.from(container.querySelectorAll('.person-card'));
+  let hasError = false;
+  const persons = cards.map(card => {
+    const formules = Array.from(card.querySelectorAll('input[type="checkbox"]:checked')).map(c => c.value);
+    const errorEl = card.querySelector('.formule-error');
+    const missing = formules.length === 0;
+    errorEl.classList.toggle('show', missing);
+    if (missing) hasError = true;
+    return {
+      nom: card.querySelector('[data-field="nom"]').value,
+      prenom: card.querySelector('[data-field="prenom"]').value,
+      naissance: card.querySelector('[data-field="naissance"]').value,
+      statut: card.querySelector('[data-field="statut"]').value,
+      formules
+    };
+  });
+
+  if (hasError || !e.target.reportValidity()) return;
+
+  const f = new FormData(e.target);
+  const get = (k) => f.get(k) || '';
+
+  const contact = persons[0];
+  const subject = `Pré-inscription saison 2027 — ${contact.prenom} ${contact.nom}${persons.length > 1 ? ` + ${persons.length - 1} autre(s)` : ''}`;
+
+  const personsText = persons.map((p, i) =>
+`Personne ${i + 1} :
+  Nom : ${p.nom}
+  Prénom : ${p.prenom}
+  Date de naissance : ${p.naissance}
+  Type : ${p.statut}
+  Formule(s) : ${p.formules.join(', ')}`
+  ).join('\n\n');
+
+  const body =
+`Nouvelle pré-inscription reçue via le site :
+
+Téléphone : ${get('telephone')}
+Email : ${get('email')}
+Nombre de personnes : ${persons.length}
+
+${personsText}
+
+Remarques : ${get('message') || '—'}
+`;
+
+  const mailto = `mailto:tcpm13170@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  const confirm = document.getElementById('confirm-msg');
+  confirm.style.display = 'block';
+  window.location.href = mailto;
+});
+</script>
+
+</body>
+</html>

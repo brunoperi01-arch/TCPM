@@ -347,6 +347,10 @@ footer .c{font-size:12.5px;color:var(--muted);line-height:1.6}
 
     <input type="text" id="hp" class="hp" tabindex="-1" autocomplete="off" aria-hidden="true">
 
+    <!-- Repli : soumission HTML classique, non soumise aux regles CORS.
+         Utilise automatiquement si l'envoi en arriere-plan echoue. -->
+    <form id="repli" method="POST" action="" style="display:none" aria-hidden="true"></form>
+
     <p id="err"></p>
     <a id="secours" href="#">Envoyer par e-mail</a>
 
@@ -395,6 +399,7 @@ var PART = {reguliere:"Régulièrement", plusieurs:"Plusieurs rencontres",
 
 function $(id){ return document.getElementById(id); }
 var etat = {cat:"", part:"", dispos:[], dk:false, rem:"", cap:""};
+var champs = {};
 
 var i, o;
 for (i = 0; i < CLASSEMENTS.length; i++) {
@@ -521,7 +526,7 @@ $("send").addEventListener("click", function(){
     return etat.dispos.indexOf(d.id) > -1;
   }).map(function(d){ return d.c; }).join(" · ");
 
-  var champs = {
+  champs = {
     "_subject": "Seniors+ 2026 — +" + etat.cat + " — " + val("nom").toUpperCase() + " " + val("prenom"),
     "_template": "table",
     "_captcha": "false",
@@ -541,31 +546,61 @@ $("send").addEventListener("click", function(){
     "Envoyé le": new Date().toLocaleString("fr-FR")
   };
 
-  function reactiver(){
-    $("send").disabled = false;
-    $("send").textContent = "Je valide mon inscription";
-  }
-
+  // Etape 1 : envoi en arriere-plan (garde l'utilisateur sur la page).
   fetch(ENDPOINT, {
     method: "POST",
-    headers: {"Content-Type": "application/x-www-form-urlencoded"},
-    body: new URLSearchParams(champs).toString()
+    headers: {"Content-Type": "application/json", "Accept": "application/json"},
+    body: JSON.stringify(champs)
   })
   .then(function(r){
+    if (!r.ok) { throw new Error("http " + r.status); }
     return r.json().then(function(j){ return j; }, function(){ return {}; });
   })
   .then(function(j){
     if (j && String(j.success) === "false") { throw new Error("refus"); }
-    $("app").style.display = "none";
-    $("dTitre").textContent = "Merci, " + val("prenom") + " !";
-    $("dCat").textContent = "Catégorie +" + etat.cat;
-    $("done").style.display = "flex";
-    window.scrollTo(0, 0);
-    reactiver();
+    succes();
   })
   .catch(function(){
-    var txt = Object.keys(champs).filter(function(c){ return c.charAt(0) !== "_"; })
-      .map(function(c){ return c + " : " + champs[c]; }).join("\n");
+    // Etape 2 : repli par soumission HTML classique.
+    // Aucune requete AJAX, donc aucun blocage CORS possible.
+    envoiClassique();
+  });
+});
+
+function succes(){
+  $("app").style.display = "none";
+  $("dTitre").textContent = "Merci, " + val("prenom") + " !";
+  $("dCat").textContent = "Catégorie +" + etat.cat;
+  $("done").style.display = "flex";
+  window.scrollTo(0, 0);
+}
+
+function envoiClassique(){
+  var f = $("repli");
+  f.action = "https://formsubmit.co/" + EMAIL_PRINCIPAL;
+  f.innerHTML = "";
+
+  var suite = location.href.split("#")[0].split("?")[0];
+  var tous = {};
+  var c;
+  for (c in champs) { if (Object.prototype.hasOwnProperty.call(champs, c)) { tous[c] = champs[c]; } }
+  tous["_next"] = suite + "?merci=" + encodeURIComponent(val("prenom")) + "&cat=" + etat.cat;
+
+  for (c in tous) {
+    if (Object.prototype.hasOwnProperty.call(tous, c)) {
+      var inp = document.createElement("input");
+      inp.type = "hidden";
+      inp.name = c;
+      inp.value = tous[c];
+      f.appendChild(inp);
+    }
+  }
+  // Si la navigation ne se declenche pas, on rend la main a l'utilisateur.
+  setTimeout(function(){
+    $("send").disabled = false;
+    $("send").textContent = "Je valide mon inscription";
+    var txt = Object.keys(champs).filter(function(k){ return k.charAt(0) !== "_"; })
+      .map(function(k){ return k + " : " + champs[k]; }).join("\n");
     $("secours").href = "mailto:" + EMAIL_PRINCIPAL
       + "?cc=" + encodeURIComponent(EMAIL_COPIE)
       + "&subject=" + encodeURIComponent(champs._subject)
@@ -573,11 +608,27 @@ $("send").addEventListener("click", function(){
     $("secours").style.display = "block";
     $("err").textContent = "L'envoi automatique n'a pas abouti. Utilise le bouton ci-dessous : ton inscription est déjà pré-remplie dans un e-mail.";
     $("err").style.display = "block";
-    reactiver();
-  });
-});
+  }, 8000);
+
+  f.submit();
+}
 
 maj();
+
+// Retour apres une soumission classique : ?merci=Prenom&cat=35
+(function(){
+  var q = location.search;
+  if (q.indexOf("merci=") === -1) { return; }
+  var p = {}, i, kv, parts = q.replace(/^\?/, "").split("&");
+  for (i = 0; i < parts.length; i++) {
+    kv = parts[i].split("=");
+    p[kv[0]] = decodeURIComponent((kv[1] || "").replace(/\+/g, " "));
+  }
+  $("app").style.display = "none";
+  $("dTitre").textContent = p.merci ? "Merci, " + p.merci + " !" : "Merci !";
+  $("dCat").textContent = p.cat ? "Catégorie +" + p.cat : "";
+  $("done").style.display = "flex";
+})();
 })();
 </script>
 </body>

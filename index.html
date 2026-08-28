@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#EAF3FC">
 <title>Championnat Seniors+ 2026 — TC Pennes-Mirabeau</title>
-<meta name="description" content="Inscris-toi aux equipes +35 et +45 du TC Pennes-Mirabeau pour la saison 2026. Reponse en moins d'une minute.">
+<meta name="description" content="Inscris-toi aux equipes +35, +45 et +55 du TC Pennes-Mirabeau pour la saison 2026. Reponse en moins d'une minute.">
 <meta property="og:title" content="Championnat Seniors+ 2026 — TC Pennes-Mirabeau">
-<meta property="og:description" content="Envie de defendre les couleurs du TCPM ? Dis-nous en 1 minute si tu veux jouer en +35 ou +45.">
+<meta property="og:description" content="Envie de defendre les couleurs du TCPM ? Dis-nous en 1 minute si tu veux jouer en +35, +45 ou +55.">
 <meta property="og:type" content="website">
 <meta property="og:image" content="logo-tcpm.jpg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -124,12 +124,14 @@ textarea{padding:14px;min-height:110px;line-height:1.5;resize:vertical}
 .row2>*{min-width:0}
 .count{text-align:right;font-size:12.5px;color:var(--muted);margin-top:6px}
 
-.big{min-height:104px;border-radius:16px;border:2px solid var(--line);background:var(--sky);
+.cats{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;min-width:0}
+.cats>*{min-width:0}
+.big{min-height:94px;border-radius:16px;border:2px solid var(--line);background:var(--sky);
      color:var(--ink);display:flex;flex-direction:column;align-items:center;justify-content:center}
-.big .n{font-family:var(--display);font-weight:900;font-size:38px;line-height:1;
-        letter-spacing:-.03em;color:var(--blue)}
-.big .u{font-family:var(--sport);font-style:italic;font-weight:700;font-size:16px;
-        letter-spacing:.1em;text-transform:uppercase;margin-top:4px;color:var(--muted)}
+.big .n{font-family:var(--display);font-weight:900;font-size:clamp(26px,8vw,34px);line-height:1;
+        letter-spacing:-.04em;color:var(--blue)}
+.big .u{font-family:var(--sport);font-style:italic;font-weight:700;font-size:14px;
+        letter-spacing:.08em;text-transform:uppercase;margin-top:3px;color:var(--muted)}
 .big[aria-pressed="true"]{background:var(--blue);border-color:var(--blue);color:#fff;
         box-shadow:0 8px 20px rgba(27,111,184,.3)}
 .big[aria-pressed="true"] .n{color:#fff}
@@ -233,7 +235,7 @@ footer .c{font-size:12.5px;color:var(--muted);line-height:1.6}
       <div class="eyebrow">Championnat</div>
       <h1>Seniors<span class="plus">+</span><span class="yr">2026</span></h1>
       <p class="hook">Envie de défendre les couleurs du TCPM ?</p>
-      <p class="sub">Nous préparons actuellement nos équipes <b>+35</b> et <b>+45</b> pour la saison 2026. Indique-nous en quelques secondes si tu souhaites participer.</p>
+      <p class="sub">Nous préparons actuellement nos équipes <b>+35</b>, <b>+45</b> et <b>+55</b> pour la saison 2026. Indique-nous en quelques secondes si tu souhaites participer.</p>
       <a class="cta" href="#form">Je m'inscris</a>
       <div class="heronote">⏱ Réponse en moins d'une minute</div>
     </div>
@@ -246,7 +248,7 @@ footer .c{font-size:12.5px;color:var(--muted);line-height:1.6}
 
   <section>
     <div class="cards">
-      <div class="info"><div class="k">+35 ou +45</div><div class="t">Une seule catégorie</div><div class="d">Un joueur ne peut être inscrit et jouer que dans une seule catégorie d'âge.</div></div>
+      <div class="info"><div class="k">+35, +45 ou +55</div><div class="t">Une seule catégorie</div><div class="d">Un joueur ne peut être inscrit et jouer que dans une seule catégorie d'âge.</div></div>
       <div class="info"><div class="k">5 journées</div><div class="t">Le dimanche matin</div><div class="d">Les rencontres se jouent principalement le dimanche matin.</div></div>
       <div class="info"><div class="k">Esprit équipe</div><div class="t">À ton rythme</div><div class="d">Chaque joueur peut indiquer s'il souhaite jouer régulièrement ou seulement ponctuellement.</div></div>
     </div>
@@ -286,11 +288,12 @@ footer .c{font-size:12.5px;color:var(--muted);line-height:1.6}
 
     <fieldset id="fs1">
       <div class="q">Dans quelle catégorie souhaites-tu jouer ?</div>
-      <div class="row2">
+      <div class="cats">
         <button type="button" class="big" data-cat="35" aria-pressed="false"><span class="n">+35</span><span class="u">ans</span></button>
         <button type="button" class="big" data-cat="45" aria-pressed="false"><span class="n">+45</span><span class="u">ans</span></button>
+        <button type="button" class="big" data-cat="55" aria-pressed="false"><span class="n">+55</span><span class="u">ans</span></button>
       </div>
-      <p class="rule">Le règlement prévoit qu'un joueur ne peut participer qu'à une seule catégorie d'âge : +35 ou +45.</p>
+      <p class="rule">Le règlement prévoit qu'un joueur ne peut participer qu'à une seule catégorie d'âge : +35, +45 ou +55.</p>
       <div style="margin-top:26px">
         <div class="q">Comment souhaites-tu participer ?</div>
         <div class="stack">
@@ -392,8 +395,8 @@ var DATES = [
   {id:"2026-11-15", c:"15 nov."}, {id:"2026-11-29", c:"29 nov."},
   {id:"2026-12-06", c:"6 dec."},  {id:"2026-12-13", c:"13 dec."}
 ];
-var CLASSEMENTS = ["NC","40","30/5","30/4","30/3","30/2","30/1","30","15/5","15/4","15/3","15/2","15/1","15",
-  "5/6","5/5","5/4","5/3","5/2","5/1","5","4/6","4/5","4/4","4/3","4/2","4/1","4","3/6 et mieux"];
+var CLASSEMENTS = ["NC","40","30/5","30/4","30/3","30/2","30/1","30",
+  "15/5","15/4","15/3","15/2","15/1","15","5/6","4/6","3/6","2/6","1/6","0"];
 var PART = {reguliere:"Régulièrement", plusieurs:"Plusieurs rencontres",
             ponctuelle:"Ponctuellement", remplacant:"Comme remplaçant(e)"};
 

@@ -105,6 +105,13 @@ h2{font-family:var(--display);font-weight:900;font-size:27px;letter-spacing:-.02
             border-radius:8px;padding:6px 10px}
 #reports p{font-size:13px;color:var(--muted);margin:12px 0 0}
 
+.tarifs{border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.tr{display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--white);
+    border-bottom:1px solid var(--line)}
+.tr:last-child{border-bottom:0}
+.tl{font-size:15px;font-weight:600;flex:1;min-width:0}
+.tl em{font-style:normal;color:var(--muted);font-weight:500;font-size:13.5px}
+.tp{font-family:var(--display);font-weight:900;font-size:20px;color:var(--blue);flex-shrink:0}
 main{padding:10px 16px 34px;scroll-margin-top:60px}
 .formsub{font-size:15px;color:var(--soft);margin:0 0 22px;line-height:1.5}
 fieldset{border:0;min-width:0;margin:0 0 16px;padding:20px 18px;background:var(--white);
@@ -255,6 +262,17 @@ footer .c{font-size:12.5px;color:var(--muted);line-height:1.6}
     </div>
   </section>
 
+
+  <section style="padding-top:10px">
+    <h2>Faut bien payer les balles 🎾</h2>
+    <div class="tarifs">
+      <div class="tr"><span class="tl">Simple messieurs ou dames</span><span class="tp">15 €</span></div>
+      <div class="tr"><span class="tl">Simple <em>— tarif jeune</em></span><span class="tp">10 €</span></div>
+      <div class="tr"><span class="tl">Double mixte <em>— par équipe</em></span><span class="tp">10 €</span></div>
+    </div>
+    <p class="hint">À régler au club avant ta première rencontre. Espèces, chèque, ou grand sourire accompagné de l'un des deux 😊</p>
+  </section>
+
   <main id="form">
     <h2>Je participe</h2>
     <p class="formsub">Trois informations suffisent pour t'inscrire.</p>
@@ -304,6 +322,7 @@ footer .c{font-size:12.5px;color:var(--muted);line-height:1.6}
       <div class="l strong" id="s0">Tableaux à choisir</div>
       <div class="l" id="s1">Licence à renseigner</div>
       <div class="l" id="s2">Partenaire : non concerné</div>
+      <div class="l" id="s3">Montant à régler</div>
     </div>
 
     <input type="text" id="hp" class="hp" tabindex="-1" autocomplete="off" aria-hidden="true">
@@ -388,6 +407,17 @@ function etapes(){
   ];
 }
 
+/* Simple : 15 €. Double mixte : 10 € par equipe. */
+function tarif(){
+  var simple = etat.tableaux.indexOf("Simple messieurs") > -1
+            || etat.tableaux.indexOf("Simple dames") > -1;
+  var mixte  = etat.tableaux.indexOf("Double mixte") > -1;
+  var parts = [];
+  if (simple) { parts.push("15 €"); }
+  if (mixte)  { parts.push("10 € par équipe"); }
+  return parts.join(" + ");
+}
+
 function ligne(id, texte, defaut){
   var e = $(id);
   e.textContent = texte || defaut;
@@ -409,6 +439,8 @@ function maj(){
   ligne("s2", mixte
     ? (val("partenaire") ? "Avec " + val("partenaire") : "Partenaire à trouver")
     : "", "Partenaire : non concerné");
+
+  ligne("s3", tarif() ? "À régler : " + tarif() : "", "Montant à régler");
 }
 
 $("send").addEventListener("click", function(){
@@ -439,6 +471,7 @@ $("send").addEventListener("click", function(){
     "Téléphone": val("tel"),
     "Tableaux": etat.tableaux.join(" + "),
     "Partenaire mixte": mixte ? (val("partenaire") || "à trouver") : "—",
+    "À régler": tarif(),
     "Commentaire": val("commentaire") || "—",
     "Envoyé le": new Date().toLocaleString("fr-FR")
   };

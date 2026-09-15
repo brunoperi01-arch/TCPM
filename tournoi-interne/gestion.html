@@ -44,9 +44,12 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--ball);outline-o
 .wrap > *:not(.ball){position:relative;z-index:1}
 
 .demo{background:rgba(217,240,58,.1);color:var(--ball);border-bottom:1px solid rgba(217,240,58,.25);font-size:12px;font-weight:600;text-align:center;padding:6px 10px}
-.modes{display:flex;gap:6px;padding:10px 16px 0}
-.modes button{flex:1;border:1px solid var(--line);background:var(--dim);color:var(--muted);border-radius:10px;padding:8px;font-size:13px;font-weight:600;cursor:pointer}
-.modes button.on{background:var(--ball);color:var(--night);border-color:var(--ball)}
+.demo a{color:#fff;font-weight:700;margin-left:6px}
+.demo a.on{color:var(--ball);text-decoration:none}
+.url{font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--muted);text-align:center;margin-top:10px}
+.login{background:var(--glass);border:1px solid var(--line);border-radius:16px;padding:20px 18px;margin-top:6px}
+.login .field:first-of-type{margin-top:0}
+.logout{background:none;border:0;color:var(--muted);font-size:13px;text-decoration:underline;cursor:pointer;display:block;margin:0 0 12px auto}
 
 header.top{padding:18px 18px 20px;text-align:center}
 .club{font-family:var(--cond);font-weight:600;letter-spacing:.38em;font-size:12px;text-transform:uppercase;color:var(--glow)}
@@ -347,7 +350,9 @@ const btnData = (act, v = "") => `data-act="${act}" data-v="${esc(v)}"`;
 /* ===================== ÉTAT ===================== */
 const fresh = () => ({ step: "cat", hist: [], cat: null, groupe: null, poule: null, player: null, opp: null, slot: null, err: null, last: null, phone1: "", phone2: "" });
 const adminFresh = () => ({ tab: "pending", val: null, court: null, refuse: null, refReason: null, cancel: null, msg: null, msgId: null });
-let S = { mode: "joueur", ...fresh(), ...adminFresh() };
+const DEMO_LOGIN = { user: "jat", pass: "tcpm2026" }; // dans la vraie app : variables d'environnement Vercel
+const routeMode = () => location.hash === "#admin" ? "admin" : "joueur";
+let S = { mode: routeMode(), auth: false, loginErr: null, ...fresh(), ...adminFresh() };
 
 function go(step) { S.hist.push(S.step); S.step = step; S.err = null; render(); window.scrollTo(0, 0); }
 function back() { S.step = S.hist.pop() || "cat"; S.err = null; render(); }
@@ -483,14 +488,24 @@ function submit() {
 }
 
 /* ===================== VUE ADMIN ===================== */
+function vLogin() {
+  return `<p class="q">Accès juge-arbitre</p><p class="sub">Réservé à l'organisation du tournoi.</p>
+    <div class="login">
+      <div class="field"><label for="lu">Identifiant</label><input id="lu" autocomplete="username" autocapitalize="off"></div>
+      <div class="field"><label for="lp">Mot de passe</label><input id="lp" type="password" autocomplete="current-password"></div>
+      ${S.loginErr ? `<div class="err">${S.loginErr}</div>` : ""}
+      <button class="cta" ${btnData("login")}>SE CONNECTER</button>
+    </div>`;
+}
 function vAdmin() {
+  if (!S.auth) return vLogin();
   const by = s => requests.filter(r => s.includes(r.status));
   const pend = by(["pending"]), conf = by(["confirmed"]), other = by(["refused", "cancelled"]);
   const aPrevenir = [...conf, ...other].reduce((n, r) => n + toNotify(r), 0);
   const list = { pending: pend, confirmed: conf, other }[S.tab]
     .slice().sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
   const empty = { pending: "Aucune demande en attente.", confirmed: "Aucun match confirmé.", other: "Aucune demande refusée ou annulée." }[S.tab];
-  return `
+  return `<button class="logout" ${btnData("logout")}>Se déconnecter</button>
     <div class="stats">
       <div class="stat s-wait"><b>${pend.length}</b><span>à valider</span></div>
       <div class="stat s-conf"><b>${conf.length}</b><span>confirmés</span></div>
@@ -577,11 +592,10 @@ function render() {
     progress = `<div class="progress">${f.map((_, i) => `<i class="${i <= idx ? "on" : ""}"></i>`).join("")}</div>`;
   }
   document.getElementById("app").innerHTML = `
-    <div class="demo">Aperçu avec données fictives, rien n'est enregistré</div>
-    <div class="modes">
-      <button class="${!admin ? "on" : ""}" ${btnData("mode", "joueur")}>Joueur</button>
-      <button class="${admin ? "on" : ""}" ${btnData("mode", "admin")}>Admin</button>
-    </div>
+    <div class="demo">Aperçu fictif. Pages :
+      <a href="#" class="${!admin ? "on" : ""}">joueur</a>
+      <a href="#admin" class="${admin ? "on" : ""}">admin</a>
+      ${admin && !S.auth ? `<br>Accès démo : ${DEMO_LOGIN.user} / ${DEMO_LOGIN.pass}` : ""}</div>
     <header class="top">
       <div class="club">${admin ? "Administration" : "TC Pennes-Mirabeau"}</div>
       <h1><span class="t1">Tournoi</span><span class="t2">Interne</span></h1>
@@ -589,6 +603,7 @@ function render() {
       ${progress}
     </header>
     <main>${body}</main>
+    <p class="url">${admin ? "tcpm.vercel.app/tournoi-interne/admin" : "tcpm.vercel.app/tournoi-interne/"}</p>
     <button class="reset" ${btnData("reset")}>Réinitialiser la démo</button>
     <div class="ball" aria-hidden="true"></div>`;
 }
@@ -606,7 +621,13 @@ document.addEventListener("click", e => {
   }
   if (S.mode === "admin" && !["court", "reason"].includes(act)) { S.msg = null; S.msgId = null; }
   switch (act) {
-    case "mode": S.mode = v; break;
+    case "login": {
+      const u = document.getElementById("lu").value.trim(), pw = document.getElementById("lp").value;
+      if (u === DEMO_LOGIN.user && pw === DEMO_LOGIN.pass) { S.auth = true; S.loginErr = null; }
+      else S.loginErr = "Identifiant ou mot de passe incorrect.";
+      break;
+    }
+    case "logout": S.auth = false; Object.assign(S, adminFresh()); break;
     case "cat": S.cat = v; return go(v === "hommes" ? "groupe" : "poule");
     case "groupe": S.groupe = v; return go("poule");
     case "poule": S.poule = v; return go("player");
@@ -642,11 +663,13 @@ document.addEventListener("click", e => {
       }
       S.cancel = null; break;
     }
-    case "reset": requests = clone(); S = { mode: S.mode, ...fresh(), ...adminFresh() }; break;
+    case "reset": requests = clone(); S = { mode: S.mode, auth: S.auth, loginErr: null, ...fresh(), ...adminFresh() }; break;
   }
   render();
 });
 
+window.addEventListener("hashchange", () => { S.mode = routeMode(); S.msg = null; S.msgId = null; render(); window.scrollTo(0, 0); });
+document.addEventListener("keydown", e => { if (e.key === "Enter" && S.mode === "admin" && !S.auth && e.target.matches("#lu,#lp")) document.querySelector('[data-act="login"]').click(); });
 requests = clone();
 render();
 </script>

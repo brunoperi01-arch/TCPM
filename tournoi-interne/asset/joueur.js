@@ -1,0 +1,201 @@
+// Page joueur : demande de créneau
+import {
+  POULES, CRENEAUX, JAT_PHONE, LISTE_POULES, getPoule, estOuverte,
+  estAVenir, isActive, pairKey, slotState, normPhone,
+} from "./config.js";
+import { esc, btnData, fmtDay, fmtShort, fmtTime, header, matchCard, api, onAction } from "./ui.js";
+
+const app = document.getElementById("app");
+const fresh = () => ({ step: "cat", hist: [], cat: null, groupe: null, poule: null, player: null, opp: null,
+  slot: null, err: null, last: null, phone1: "", phone2: "", sending: false });
+let S = fresh();
+let DATA = { requests: [], known: [] };
+let loaded = false, loadError = null;
+
+async function load() {
+  try { DATA = await api("/api/tournoi/state"); loadError = null; }
+  catch (e) { loadError = e.message; }
+  loaded = true;
+  render();
+}
+
+const known = (entry) => DATA.known.includes(entry);
+const findMatch = (pool, a, b) =>
+  DATA.requests.find((r) => isActive(r) && r.pool === pool && pairKey(r.player, r.opponent) === pairKey(a, b));
+const lastClosed = (pool, a, b) =>
+  DATA.requests.filter((r) => !isActive(r) && r.pool === pool && pairKey(r.player, r.opponent) === pairKey(a, b)).pop();
+const flow = () => ["cat", ...(S.cat === "hommes" ? ["groupe"] : []), "poule", "player", "opp", "slot", "recap"];
+
+function go(step) {
+  S.hist.push(S.step); S.step = step; S.err = null; render(); window.scrollTo(0, 0);
+  if (step === "opp" || step === "slot") load(); // données fraîches aux étapes sensibles
+}
+function back() { S.step = S.hist.pop() || "cat"; S.err = null; render(); }
+
+/* ---------- Écrans ---------- */
+function vCat() {
+  return `<p class="q">Choisissez votre catégorie</p><p class="sub">Demande de créneau pour votre match de poule</p>` +
+    Object.entries(POULES).map(([k, d]) => {
+      const info = d.groupes ? "Poules hautes et poules basses" : `${Object.keys(d.poules).length} poules`;
+      return `<button class="big" ${btnData("cat", k)}><span>${d.label}<small>${info}</small></span><span class="chev">›</span></button>`;
+    }).join("");
+}
+function vGroupe() {
+  return `<p class="q">Choisissez votre niveau</p><p class="sub">Hommes</p>` +
+    Object.entries(POULES.hommes.groupes).map(([k, d]) =>
+      `<button class="big" ${btnData("groupe", k)}><span>${d.label}<small>Poules ${Object.keys(d.poules).join(", ")}</small></span><span class="chev">›</span></button>`
+    ).join("");
+}
+function vPoule() {
+  const list = LISTE_POULES.filter((p) => p.categorie === S.cat && (S.cat !== "hommes" || p.groupe === S.groupe));
+  const titre = S.cat === "hommes" ? `Hommes, ${POULES.hommes.groupes[S.groupe].label.toLowerCase()}` : POULES[S.cat].label;
+  const unite = S.cat === "mixte" ? "équipes" : "joueurs";
+  return `<p class="q">Choisissez votre poule</p><p class="sub">${titre}</p>` +
+    list.map((p) => {
+      const open = estOuverte(p);
+      return `<button class="big letter" ${open ? "" : "disabled"} ${btnData("poule", p.id)}>
+        <span class="l">${p.lettre}</span>
+        <span class="grow">${p.nom}<small>${open ? `${p.entrees.length} ${unite}` : "Composition à venir"}</small></span>
+        ${open ? '<span class="chev">›</span>' : ""}</button>`;
+    }).join("");
+}
+function vPlayer() {
+  const p = getPoule(S.poule);
+  return `<p class="q">${S.cat === "mixte" ? "Quelle est votre équipe ?" : "Qui êtes-vous ?"}</p><p class="sub">${p.nom}</p>` +
+    p.entrees.map((e) => `<button class="big" ${btnData("player", e)}><span>${esc(e)}</span><span class="chev">›</span></button>`).join("");
+}
+function vOpp() {
+  const p = getPoule(S.poule);
+  let dispo = 0;
+  const rows = p.entrees.filter((e) => e !== S.player).map((e) => {
+    const r = findMatch(p.nom, S.player, e);
+    let badge, small = "", dis = true;
+    if (r && r.status === "confirmed") {
+      badge = `<span class="badge b-conf">Programmé</span>`;
+      small = `${fmtShort(r.date)} à ${fmtTime(r.time)}, ${esc(r.court)}`;
+    } else if (r) {
+      badge = `<span class="badge b-wait">Demande en attente</span>`;
+      small = `${fmtShort(r.date)} à ${fmtTime(r.time)}`;
+    } else {
+      dis = false; dispo++;
+      const c = lastClosed(p.nom, S.player, e);
+      if (c && c.status === "refused") {
+        badge = `<span class="badge b-full">Refusée</span>`;
+        small = `<span class="ref">${fmtShort(c.date)} à ${fmtTime(c.time)} : ${esc(c.reason || "refusée par le club")}</span><br>Touchez pour refaire une demande`;
+      } else if (c && c.status === "cancelled") {
+        badge = `<span class="badge b-grey">Annulé</span>`;
+        small = `Match du ${fmtShort(c.date)} annulé. Touchez pour refaire une demande`;
+      } else badge = `<span class="badge b-ok">Disponible</span>`;
+    }
+    return `<button class="big" ${dis ? "disabled" : ""} ${btnData("opp", e)}><span class="grow">${esc(e)}${small ? `<small>${small}</small>` : ""}</span>${badge}</button>`;
+  }).join("");
+  return `<p class="q">Votre adversaire</p><p class="sub">${esc(S.player)}, ${p.nom}</p>` +
+    (dispo ? "" : `<div class="info">Tous vos matchs sont déjà demandés ou programmés.</div>`) + rows;
+}
+function vSlot() {
+  const future = CRENEAUX.map((c, i) => ({ ...c, i })).filter(estAVenir)
+    .sort((a, b) => `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`));
+  const byDay = {};
+  future.forEach((c) => (byDay[c.date] = byDay[c.date] || []).push(c));
+  const html = Object.entries(byDay).map(([d, list]) =>
+    `<p class="day">${fmtDay(d)}</p><div class="slots">` +
+    list.map((c) => {
+      const st = slotState(DATA.requests, c, S.player, S.opp);
+      const lbl = st.type === "full" ? "Complet" : st.type === "conflict" ? "Déjà engagé" : `${st.left} terrain${st.left > 1 ? "s" : ""}`;
+      return `<button class="slot ${st.type}" ${st.type !== "ok" ? "disabled" : ""} ${btnData("slot", c.i)}><b>${fmtTime(c.time)}</b><span>${lbl}</span></button>`;
+    }).join("") + `</div>`
+  ).join("");
+  return `<p class="q">Choisissez un créneau</p><p class="sub">${esc(S.player)} contre ${esc(S.opp)}</p>` +
+    (html || `<div class="empty">Aucun créneau ouvert pour le moment. Revenez bientôt.</div>`) +
+    (html ? `<p class="note">« Déjà engagé » : un des joueurs a déjà un match sur ce créneau.</p>` : "");
+}
+function contactField(side, entry, role) {
+  if (known(entry))
+    return `<div class="known"><span>${role}</span><b>${esc(entry)}</b><em>✓ numéro connu du club</em></div>`;
+  const v = side === 1 ? S.phone1 : S.phone2;
+  const label = side === 1 ? `Votre portable (${esc(entry)})` : `Portable de ${esc(entry)}`;
+  return `<div class="field"><label for="phone${side}">${label}</label>
+    <input id="phone${side}" type="tel" inputmode="tel" autocomplete="${side === 1 ? "tel" : "off"}" placeholder="06 12 34 56 78" value="${esc(v)}"></div>`;
+}
+function vRecap() {
+  const p = getPoule(S.poule), c = CRENEAUX[S.slot], mixte = S.cat === "mixte";
+  return `<p class="q">Vérifiez votre demande</p><p class="sub">Le terrain sera attribué par le club.</p>` +
+    matchCard(POULES[S.cat].label, p.nom, S.player, S.opp, c.date, c.time) +
+    `<p class="ask-title">Prévenus sur WhatsApp à la confirmation</p>` +
+    contactField(1, S.player, mixte ? "Votre équipe" : "Vous") +
+    contactField(2, S.opp, mixte ? "Équipe adverse" : "Votre adversaire") +
+    `<p class="hint">Numéros utilisés uniquement pour le tournoi et supprimés à la fin.</p>
+     <div class="hp" aria-hidden="true"><label>Site web <input id="website" tabindex="-1" autocomplete="off"></label></div>` +
+    (S.err ? `<div class="err">${S.err}</div>` : "") +
+    `<button class="cta" ${S.sending ? "disabled" : ""} ${btnData("send")}>${S.sending ? "ENVOI…" : "ENVOYER LA DEMANDE"}</button>`;
+}
+function vDone() {
+  const r = S.last;
+  return `<div class="done"><div class="check">✓</div>
+    <h2>Demande envoyée au club</h2><p>Votre créneau doit maintenant être confirmé. Les deux joueurs seront prévenus sur WhatsApp.</p></div>` +
+    matchCard(r.catLabel, r.pool, r.player, r.opponent, r.date, r.time) +
+    `<button class="cta dark" ${btnData("again")}>Faire une autre demande</button>
+     <a class="cta dark jat" href="https://wa.me/${JAT_PHONE}" target="_blank" rel="noopener">Une question ? Écrire au juge-arbitre</a>`;
+}
+
+async function submit() {
+  if (S.sending) return;
+  const p = getPoule(S.poule), c = CRENEAUX[S.slot];
+  const read = (side, entry) => {
+    if (known(entry)) return null;
+    const raw = document.getElementById("phone" + side).value;
+    if (side === 1) S.phone1 = raw; else S.phone2 = raw;
+    return raw;
+  };
+  const phone1 = read(1, S.player), phone2 = read(2, S.opp);
+  if (phone1 !== null && !normPhone(phone1)) { S.err = "Indiquez votre numéro de portable (06 ou 07)."; return render(); }
+  if (phone2 !== null && !normPhone(phone2)) { S.err = `Indiquez le portable de ${esc(S.opp)} (06 ou 07).`; return render(); }
+
+  S.sending = true; S.err = null; render();
+  try {
+    await api("/api/tournoi/request", { method: "POST", body: {
+      poolId: p.id, player: S.player, opponent: S.opp, date: c.date, time: c.time,
+      phone1, phone2, website: document.getElementById("website")?.value || "",
+    }});
+    S.last = { catLabel: POULES[S.cat].label, pool: p.nom, player: S.player, opponent: S.opp, date: c.date, time: c.time };
+    S.hist = []; S.step = "done";
+    load();
+  } catch (e) {
+    S.err = esc(e.message);
+    if (e.status === 409) load();
+  } finally {
+    S.sending = false; render(); window.scrollTo(0, 0);
+  }
+}
+
+/* ---------- Rendu ---------- */
+function render() {
+  let body;
+  if (!loaded) body = `<div class="loading">Chargement…</div>`;
+  else if (loadError) body = `<div class="err">${esc(loadError)}</div><button class="cta dark" ${btnData("reload")}>Réessayer</button>`;
+  else {
+    const views = { cat: vCat, groupe: vGroupe, poule: vPoule, player: vPlayer, opp: vOpp, slot: vSlot, recap: vRecap, done: vDone };
+    body = (S.hist.length && S.step !== "done" ? `<button class="back" ${btnData("back")}>‹ Retour</button>` : "") + views[S.step]();
+  }
+  const f = flow(), idx = S.step === "done" ? f.length : f.indexOf(S.step);
+  const progress = `<div class="progress">${f.map((_, i) => `<i class="${i <= idx ? "on" : ""}"></i>`).join("")}</div>`;
+  app.innerHTML = header("TC Pennes-Mirabeau", progress) + `<main>${body}</main>` + `<div class="ball" aria-hidden="true"></div>`;
+}
+
+onAction((act, v) => {
+  switch (act) {
+    case "cat": S.cat = v; return go(v === "hommes" ? "groupe" : "poule");
+    case "groupe": S.groupe = v; return go("poule");
+    case "poule": S.poule = v; return go("player");
+    case "player": S.player = v; return go("opp");
+    case "opp": S.opp = v; return go("slot");
+    case "slot": S.slot = Number(v); return go("recap");
+    case "back": return back();
+    case "send": return submit();
+    case "again": S = fresh(); render(); return window.scrollTo(0, 0);
+    case "reload": loaded = false; render(); return load();
+  }
+});
+
+render();
+load();

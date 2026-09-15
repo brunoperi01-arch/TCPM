@@ -29,8 +29,8 @@ db/schema.sql                       table à créer dans Neon
 3. **Accès admin** : Vercel > Settings > Environment Variables :
    - `ADMIN_USER` = ton identifiant
    - `ADMIN_PASSWORD` = un mot de passe long (lettres et chiffres, sans accents)
-4. **Remplir** `tournoi-interne/assets/config.js` (poules + créneaux) et `api/_lib/contacts.js` (numéros).
-5. **Pousser** sur GitHub : Vercel redéploie tout seul.
+4. **Pousser** sur GitHub : Vercel redéploie tout seul.
+5. **Remplir depuis l'admin** : onglets Poules, Créneaux, Numéros.
 
 ## Vérifications après déploiement
 
@@ -38,20 +38,24 @@ db/schema.sql                       table à créer dans Neon
 2. `/tournoi-interne/gestion.html` : faire une demande test.
 3. `/tournoi-interne/admin/` : la fenêtre d'identification s'affiche, puis la demande apparaît.
 4. `/api/admin/requests` sans identifiant : doit répondre **401**.
-5. `/api/_lib/contacts.js` : doit répondre **404** (l'annuaire ne doit jamais être lisible).
+5. `/api/_lib/data.js` : doit répondre **404**.
 6. Valider la demande test, cliquer « Prévenir », puis **Annuler** le match pour nettoyer.
 
-## Pendant le tournoi
+## Pendant le tournoi (tout se fait dans l'admin)
 
-- **Ajouter un créneau** : modifier `CRENEAUX` dans `config.js`, puis pousser.
-- **Ne jamais renommer** un joueur ou **supprimer** un créneau qui a déjà des demandes.
-- **Sauvegarde** : bouton « Exporter CSV » dans l'admin (sert aussi pour MOJA).
+- **Poules** : coller les noms depuis MOJA, un par ligne, numéro facultatif après « ; ».
+  Mixte : `Joueur / Joueuse ; tél 1 ; tél 2`.
+- **Créneaux** : date, heure, nombre de terrains. Boutons − / + pour la capacité,
+  👁 pour masquer un créneau aux joueurs, 🗑 pour supprimer (seulement s'il n'a aucune demande).
+- **Numéros** : l'onglet « Manquants » liste les joueurs sans numéro.
+- 🔒 = nom verrouillé (des demandes existent) : ni renommage ni suppression.
+- **Sauvegarde** : bouton « Exporter CSV » (sert aussi pour MOJA).
 
 ## Fin du tournoi (RGPD)
 
 1. Exporter le CSV.
 2. Neon > SQL Editor : `UPDATE match_requests SET phone1 = NULL, phone2 = NULL;`
-3. Vider `api/_lib/contacts.js` et pousser.
+3. La requête ci-dessus supprime aussi l'annuaire : `DELETE FROM player_contacts;`
 
 ## Tester en local (facultatif)
 

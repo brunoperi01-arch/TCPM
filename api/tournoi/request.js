@@ -1,9 +1,9 @@
 // POST /api/tournoi/request — création d'une demande (statut pending)
 // Tout est revérifié ici : le navigateur n'est jamais cru sur parole.
 import { withTx, sendError, HttpError, body } from "../_lib/db.js";
-import { contactOf } from "../_lib/contacts.js";
+import { loadData, fromClient, contactOf } from "../_lib/data.js";
 import {
-  getPoule, estOuverte, findCreneau, estAVenir, clean, normPhone, slotState,
+  getPoule, estAVenir, clean, normPhone, slotState, DATE_RE, TIME_RE,
 } from "../../tournoi-interne/assets/config.js";
 
 export default async function handler(req, res) {
@@ -15,22 +15,26 @@ export default async function handler(req, res) {
     if (b.website) return res.status(200).json({ ok: true });
 
     const poule = getPoule(b.poolId);
-    if (!poule || !estOuverte(poule)) throw new HttpError(400, "Poule inconnue.");
+    if (!poule) throw new HttpError(400, "Poule inconnue.");
     const player = clean(b.player), opponent = clean(b.opponent);
-    if (!poule.entrees.includes(player) || !poule.entrees.includes(opponent))
-      throw new HttpError(400, "Joueur inconnu dans cette poule.");
     if (player === opponent) throw new HttpError(400, "Vous ne pouvez pas jouer contre vous-même.");
-
-    const creneau = findCreneau(b.date, b.time);
-    if (!creneau) throw new HttpError(400, "Ce créneau n'existe pas.");
-    if (!estAVenir(creneau)) throw new HttpError(400, "Ce créneau est passé.");
-
-    const phone1 = contactOf(player) || normPhone(b.phone1);
-    const phone2 = contactOf(opponent) || normPhone(b.phone2);
-    if (!phone1) throw new HttpError(400, "Indiquez votre numéro de portable (06 ou 07).");
-    if (!phone2) throw new HttpError(400, `Indiquez le portable de ${opponent} (06 ou 07).`);
+    if (!DATE_RE.test(b.date) || !TIME_RE.test(b.time)) throw new HttpError(400, "Créneau invalide.");
 
     const id = await withTx(async (db) => {
+      const data = await loadData(fromClient(db));
+      const entrees = data.entries[poule.id] || [];
+      if (!entrees.includes(player) || !entrees.includes(opponent))
+        throw new HttpError(400, "Joueur inconnu dans cette poule.");
+
+      const creneau = data.slots.find((s) => s.active && s.date === b.date && s.time === b.time);
+      if (!creneau) throw new HttpError(400, "Ce créneau n'est plus proposé.");
+      if (!estAVenir(creneau)) throw new HttpError(400, "Ce créneau est passé.");
+
+      const phone1 = contactOf(data.contacts, player) || normPhone(b.phone1);
+      const phone2 = contactOf(data.contacts, opponent) || normPhone(b.phone2);
+      if (!phone1) throw new HttpError(400, "Indiquez votre numéro de portable (06 ou 07).");
+      if (!phone2) throw new HttpError(400, `Indiquez le portable de ${opponent} (06 ou 07).`);
+
       // Limite simple : 10 demandes par numéro sur une heure
       const { rows: recent } = await db.query(
         `SELECT count(*)::int AS n FROM match_requests

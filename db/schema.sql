@@ -40,7 +40,33 @@ CREATE INDEX IF NOT EXISTS idx_slot
 CREATE INDEX IF NOT EXISTS idx_phone_recent
   ON match_requests (phone1, created_at);
 
+-- Gestion depuis l'admin : joueurs, créneaux, numéros
+CREATE TABLE IF NOT EXISTS pool_entries (
+  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  pool_id text NOT NULL,
+  name text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (pool_id, name)
+);
+
+CREATE TABLE IF NOT EXISTS tournament_slots (
+  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  slot_date date NOT NULL,
+  slot_time time NOT NULL,
+  capacity smallint NOT NULL CHECK (capacity BETWEEN 1 AND 6),
+  active boolean NOT NULL DEFAULT true,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (slot_date, slot_time)
+);
+
+CREATE TABLE IF NOT EXISTS player_contacts (
+  name text PRIMARY KEY,
+  phone text NOT NULL CHECK (phone ~ '^33[67][0-9]{8}$'),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
 -- ------------------------------------------------------------
 -- FIN DU TOURNOI (à lancer à la main, après export CSV) :
 -- UPDATE match_requests SET phone1 = NULL, phone2 = NULL;
+-- DELETE FROM player_contacts;
 -- ------------------------------------------------------------

@@ -1,7 +1,7 @@
 // POST /api/admin/action — valider, refuser, annuler, marquer « prévenu »
 import { withTx, sql, ADMIN_COLS, sendError, HttpError, body } from "../_lib/db.js";
 import { requireAdmin } from "../_lib/auth.js";
-import { TERRAINS, MOTIFS, capOf } from "../../tournoi-interne/assets/config.js";
+import { TERRAINS, MOTIFS } from "../../tournoi-interne/assets/config.js";
 
 const UUID = /^[0-9a-f-]{36}$/i;
 
@@ -26,9 +26,12 @@ export default async function handler(req, res) {
         await db.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`${r.date} ${r.time}`]);
 
         const { rows: c } = await db.query(
-          `SELECT count(*)::int AS n FROM match_requests
+          `SELECT count(*)::int AS n,
+                  (SELECT capacity FROM tournament_slots
+                   WHERE slot_date = $1 AND slot_time = $2) AS cap
+           FROM match_requests
            WHERE requested_date = $1 AND requested_time = $2 AND status = 'confirmed'`, [r.date, r.time]);
-        if (c[0].n >= capOf(r.date, r.time))
+        if (c[0].n >= (c[0].cap ?? 0))
           throw new HttpError(409, "Créneau complet : validation impossible.");
 
         await db.query(

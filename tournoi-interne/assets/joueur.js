@@ -1,7 +1,6 @@
 // Page joueur : demande de créneau
 import {
-  POULES, CRENEAUX, JAT_PHONE, LISTE_POULES, getPoule, estOuverte,
-  estAVenir, isActive, pairKey, slotState, normPhone,
+  POULES, JAT_PHONE, LISTE_POULES, getPoule, estAVenir, isActive, pairKey, slotState, normPhone,
 } from "./config.js";
 import { esc, btnData, fmtDay, fmtShort, fmtTime, header, matchCard, api, onAction } from "./ui.js";
 
@@ -9,7 +8,8 @@ const app = document.getElementById("app");
 const fresh = () => ({ step: "cat", hist: [], cat: null, groupe: null, poule: null, player: null, opp: null,
   slot: null, err: null, last: null, phone1: "", phone2: "", sending: false });
 let S = fresh();
-let DATA = { requests: [], known: [] };
+let DATA = { requests: [], known: [], entries: {}, creneaux: [] };
+const entreesDe = (id) => DATA.entries[id] || [];
 let loaded = false, loadError = null;
 
 async function load() {
@@ -52,22 +52,22 @@ function vPoule() {
   const unite = S.cat === "mixte" ? "équipes" : "joueurs";
   return `<p class="q">Choisissez votre poule</p><p class="sub">${titre}</p>` +
     list.map((p) => {
-      const open = estOuverte(p);
+      const n = entreesDe(p.id).length, open = n >= 2;
       return `<button class="big letter" ${open ? "" : "disabled"} ${btnData("poule", p.id)}>
         <span class="l">${p.lettre}</span>
-        <span class="grow">${p.nom}<small>${open ? `${p.entrees.length} ${unite}` : "Composition à venir"}</small></span>
+        <span class="grow">${p.nom}<small>${open ? `${n} ${unite}` : "Composition à venir"}</small></span>
         ${open ? '<span class="chev">›</span>' : ""}</button>`;
     }).join("");
 }
 function vPlayer() {
   const p = getPoule(S.poule);
   return `<p class="q">${S.cat === "mixte" ? "Quelle est votre équipe ?" : "Qui êtes-vous ?"}</p><p class="sub">${p.nom}</p>` +
-    p.entrees.map((e) => `<button class="big" ${btnData("player", e)}><span>${esc(e)}</span><span class="chev">›</span></button>`).join("");
+    entreesDe(p.id).map((e) => `<button class="big" ${btnData("player", e)}><span>${esc(e)}</span><span class="chev">›</span></button>`).join("");
 }
 function vOpp() {
   const p = getPoule(S.poule);
   let dispo = 0;
-  const rows = p.entrees.filter((e) => e !== S.player).map((e) => {
+  const rows = entreesDe(p.id).filter((e) => e !== S.player).map((e) => {
     const r = findMatch(p.nom, S.player, e);
     let badge, small = "", dis = true;
     if (r && r.status === "confirmed") {
@@ -93,7 +93,7 @@ function vOpp() {
     (dispo ? "" : `<div class="info">Tous vos matchs sont déjà demandés ou programmés.</div>`) + rows;
 }
 function vSlot() {
-  const future = CRENEAUX.map((c, i) => ({ ...c, i })).filter(estAVenir)
+  const future = DATA.creneaux.map((c, i) => ({ ...c, i })).filter(estAVenir)
     .sort((a, b) => `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`));
   const byDay = {};
   future.forEach((c) => (byDay[c.date] = byDay[c.date] || []).push(c));
@@ -118,7 +118,7 @@ function contactField(side, entry, role) {
     <input id="phone${side}" type="tel" inputmode="tel" autocomplete="${side === 1 ? "tel" : "off"}" placeholder="06 12 34 56 78" value="${esc(v)}"></div>`;
 }
 function vRecap() {
-  const p = getPoule(S.poule), c = CRENEAUX[S.slot], mixte = S.cat === "mixte";
+  const p = getPoule(S.poule), c = S.slot, mixte = S.cat === "mixte";
   return `<p class="q">Vérifiez votre demande</p><p class="sub">Le terrain sera attribué par le club.</p>` +
     matchCard(POULES[S.cat].label, p.nom, S.player, S.opp, c.date, c.time) +
     `<p class="ask-title">Prévenus sur WhatsApp à la confirmation</p>` +
@@ -140,7 +140,7 @@ function vDone() {
 
 async function submit() {
   if (S.sending) return;
-  const p = getPoule(S.poule), c = CRENEAUX[S.slot];
+  const p = getPoule(S.poule), c = S.slot;
   const read = (side, entry) => {
     if (known(entry)) return null;
     const raw = document.getElementById("phone" + side).value;
@@ -189,7 +189,7 @@ onAction((act, v) => {
     case "poule": S.poule = v; return go("player");
     case "player": S.player = v; return go("opp");
     case "opp": S.opp = v; return go("slot");
-    case "slot": S.slot = Number(v); return go("recap");
+    case "slot": S.slot = { ...DATA.creneaux[Number(v)] }; return go("recap");
     case "back": return back();
     case "send": return submit();
     case "again": S = fresh(); render(); return window.scrollTo(0, 0);

@@ -124,12 +124,17 @@ main{flex:1;padding:8px 16px 28px}
 .done h2{font-family:var(--brush);font-weight:400;font-size:28px;line-height:1.1;color:#fff;text-shadow:0 0 14px rgba(79,179,255,.6)}
 .done p{color:var(--muted);margin:8px 0 18px}
 
-.field{margin-top:18px}
+.ask-title{font-weight:700;font-size:15px;color:#fff;margin-top:20px}
+.known{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;background:var(--dim);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-top:8px}
+.known span{font-size:12px;color:var(--muted);width:100%}
+.known b{color:#fff;font-size:15px}
+.known em{font-style:normal;font-size:12px;color:#6ff0a8;margin-left:auto}
+.field{margin-top:12px}
 .field label{display:block;font-weight:700;font-size:15px;margin-bottom:6px;color:#fff}
 .field input{width:100%;font:inherit;font-size:18px;padding:15px 16px;border:1px solid var(--line);border-radius:12px;background:rgba(4,11,31,.7);color:#fff}
 .field input::placeholder{color:#5a6d93}
 .field input:focus{outline:none;border-color:var(--electric);box-shadow:0 0 14px rgba(79,179,255,.3)}
-.field .hint{font-size:12px;color:var(--muted);margin-top:6px;line-height:1.4}
+.hint{font-size:12px;color:var(--muted);margin-top:6px;line-height:1.4}
 
 /* Admin */
 .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
@@ -221,20 +226,29 @@ const NOW = new Date("2026-09-15T12:00:00"); // date figée pour l'aperçu
 
 // Demandes déjà présentes (simule la table Neon)
 const SEED = [
-  { category:"hommes", pool:"Poule Haute A", player:"Bruno Peri", opponent:"Thomas Garcia", date:"2026-09-16", time:"19:30", status:"confirmed", court:"Terrain 1", phone:"33612345678", notified:true },
-  { category:"femmes", pool:"Poule Filles B", player:"Julie Leroy", opponent:"Emma Simon", date:"2026-09-16", time:"19:30", status:"confirmed", court:"Terrain 3", phone:"33623456789", notified:false },
-  { category:"hommes", pool:"Poule Haute B", player:"Antoine Roux", opponent:"Mathieu Fabre", date:"2026-09-16", time:"18:00", status:"confirmed", court:"Terrain 2", phone:"33634567890", notified:true },
-  { category:"femmes", pool:"Poule Filles A", player:"Sophie Rossi", opponent:"Marie Martin", date:"2026-09-16", time:"18:00", status:"confirmed", court:"Terrain 4", phone:"33745678901", notified:true },
-  { category:"hommes", pool:"Poule Haute A", player:"Julien Moreau", opponent:"Nicolas Blanc", date:"2026-09-17", time:"20:00", status:"pending", court:null, phone:"33656789012" },
-  { category:"hommes", pool:"Poule Haute B", player:"Olivier Girard", opponent:"Sébastien Mercier", date:"2026-09-19", time:"09:00", status:"pending", court:null, phone:"33667890123" },
-  { category:"mixte", pool:"Poule Mixte A", player:"Antoine Roux / Camille Durand", opponent:"Pierre Bonnet / Julie Leroy", date:"2026-09-16", time:"21:00", status:"pending", court:null, phone:"33634567890" },
-  { category:"hommes", pool:"Poule Basse A", player:"Hugo François", opponent:"Lucas Martinez", date:"2026-09-16", time:"19:30", status:"pending", court:null, phone:"33778901234" },
-  { category:"hommes", pool:"Poule Haute C", player:"Laurent Faure", opponent:"David André", date:"2026-09-17", time:"18:30", status:"refused", court:null, phone:"33689012345", reason:"Créneau indisponible", notified:false },
+  { category:"hommes", pool:"Poule Haute A", player:"Bruno Peri", opponent:"Thomas Garcia", date:"2026-09-16", time:"19:30", status:"confirmed", court:"Terrain 1", phone1:"33612345678", phone2:null, notified1:true, notified2:true },
+  { category:"femmes", pool:"Poule Filles B", player:"Julie Leroy", opponent:"Emma Simon", date:"2026-09-16", time:"19:30", status:"confirmed", court:"Terrain 3", phone1:"33623456789", phone2:null, notified1:false, notified2:false },
+  { category:"hommes", pool:"Poule Haute B", player:"Antoine Roux", opponent:"Mathieu Fabre", date:"2026-09-16", time:"18:00", status:"confirmed", court:"Terrain 2", phone1:"33634567890", phone2:null, notified1:true, notified2:true },
+  { category:"femmes", pool:"Poule Filles A", player:"Sophie Rossi", opponent:"Marie Martin", date:"2026-09-16", time:"18:00", status:"confirmed", court:"Terrain 4", phone1:"33745678901", phone2:null, notified1:true, notified2:true },
+  { category:"hommes", pool:"Poule Haute A", player:"Julien Moreau", opponent:"Nicolas Blanc", date:"2026-09-17", time:"20:00", status:"pending", court:null, phone1:"33656789012", phone2:null },
+  { category:"hommes", pool:"Poule Haute B", player:"Olivier Girard", opponent:"Sébastien Mercier", date:"2026-09-19", time:"09:00", status:"pending", court:null, phone1:"33667890123", phone2:null },
+  { category:"mixte", pool:"Poule Mixte A", player:"Antoine Roux / Camille Durand", opponent:"Pierre Bonnet / Julie Leroy", date:"2026-09-16", time:"21:00", status:"pending", court:null, phone1:"33634567890", phone2:null },
+  { category:"hommes", pool:"Poule Basse A", player:"Hugo François", opponent:"Lucas Martinez", date:"2026-09-16", time:"19:30", status:"pending", court:null, phone1:"33778901234", phone2:null },
+  { category:"hommes", pool:"Poule Haute C", player:"Laurent Faure", opponent:"David André", date:"2026-09-17", time:"18:30", status:"refused", court:null, phone1:"33689012345", phone2:null, reason:"Créneau indisponible", notified1:false, notified2:false },
 ];
 
 const FORM_URL = "https://tcpm.vercel.app/tournoi-interne/"; // adresse de l'affiche
 const JAT_PHONE = "33687726423"; // WhatsApp du juge-arbitre
 const SIGNATURE = "Bruno Peri, juge-arbitre du tournoi";
+// Annuaire des numéros (issu des inscriptions). Dans la vraie app : fichier côté serveur
+// uniquement, jamais envoyé au navigateur. Julien Moreau et Nicolas Blanc sont volontairement absents.
+const CONTACTS = {
+  "Bruno Peri":"33612345678","Thomas Garcia":"33611111111","Julie Leroy":"33623456789","Emma Simon":"33622222222",
+  "Antoine Roux":"33634567890","Mathieu Fabre":"33633333333","Sophie Rossi":"33745678901","Marie Martin":"33744444444",
+  "Olivier Girard":"33667890123","Sébastien Mercier":"33655555555","Pierre Bonnet":"33666666666","Camille Durand":"33677777777",
+  "Hugo François":"33778901234","Lucas Martinez":"33788888888","Laurent Faure":"33689012345","David André":"33699999999",
+  "Romain Chevalier":"33610101010","Kévin Lambert":"33620202020","Laura Petit":"33630303030","Chloé Michel":"33640404040",
+};
 const MOTIFS = ["Créneau indisponible", "Erreur de joueur", "Match déjà programmé", "Autre"];
 
 /* ===================== LECTURE CONFIG ===================== */
@@ -260,8 +274,8 @@ const joueursDe = e => e.split("/").map(clean);
 
 /* ===================== LOGIQUE (côté serveur dans la vraie app) ===================== */
 let uid = 0;
-const clone = () => SEED.map(r => ({ ...r, id: "r" + (++uid) }));
-let requests = clone();
+const clone = () => SEED.map(r => ({ ...r, id: "r" + (++uid), phone2: r.phone2 || contactOf(r.opponent) }));
+let requests = [];
 
 const isActive = r => r.status === "pending" || r.status === "confirmed";
 const pair = (a, b) => [a, b].sort().join("|");
@@ -283,22 +297,35 @@ function normPhone(raw) {
   if (d.startsWith("0")) d = "33" + d.slice(1);
   return /^33[67]\d{8}$/.test(d) ? d : null;
 }
+const contactOf = entry => joueursDe(entry).map(n => CONTACTS[n]).find(Boolean) || null;
+const prenom = entry => joueursDe(entry)[0].split(" ")[0];
 const fmtPhone = p => ("0" + p.slice(2)).replace(/(\d{2})(?=\d)/g, "$1 ");
 
-function waMessage(r) {
-  return waBody(r) + `\n\n${SIGNATURE}`;
+function waMessage(r, side) {
+  return waBody(r, side) + `\n\n${SIGNATURE}`;
 }
-function waBody(r) {
+function waBody(r, side) {
+  const moi = side === 1 ? r.player : r.opponent;
+  const lui = side === 1 ? r.opponent : r.player;
   const quand = `${fmtDay(r.date).toLowerCase()} à ${fmtTime(r.time)}`;
-  const match = `${r.player} contre ${r.opponent}`;
   if (r.status === "confirmed")
-    return `✅ Tournoi interne TCPM\n${match}\nMatch confirmé ${quand}, ${r.court}.\nPensez à prévenir votre adversaire. Bon match ! 🎾`;
+    return `✅ Tournoi interne TCPM\nBonjour ${prenom(moi)}, votre match contre ${lui} est confirmé ${quand}, ${r.court}.\nBon match ! 🎾`;
+  const intro = side === 1 ? "Votre demande" : `La demande de ${lui}`;
   if (r.status === "refused")
-    return `❌ Tournoi interne TCPM\nVotre demande ${match} du ${quand} n'a pas pu être acceptée${r.reason ? ` (${r.reason.toLowerCase()})` : ""}.\nRefaites une demande sur un autre créneau : ${FORM_URL}`;
-  return `⚠️ Tournoi interne TCPM\nLe match ${match} du ${quand} est annulé.\nRefaites une demande sur un autre créneau : ${FORM_URL}`;
+    return `❌ Tournoi interne TCPM\nBonjour ${prenom(moi)}, ${intro.charAt(0).toLowerCase() + intro.slice(1)} pour le match ${r.player} contre ${r.opponent} du ${quand} n'a pas pu être acceptée${r.reason ? ` (${r.reason.toLowerCase()})` : ""}.\nUne nouvelle demande peut être faite ici : ${FORM_URL}`;
+  return `⚠️ Tournoi interne TCPM\nBonjour ${prenom(moi)}, votre match contre ${lui} du ${quand} est annulé.\nUne nouvelle demande peut être faite ici : ${FORM_URL}`;
 }
-const waLink = r => `https://wa.me/${r.phone}?text=${encodeURIComponent(waMessage(r))}`;
-const waButton = r => `<button class="btn btn-wa ${r.notified ? "sent" : ""}" ${btnData("wa", r.id)}>${r.notified ? "✓ Prévenu (renvoyer)" : "Prévenir sur WhatsApp"}</button>`;
+const phoneOf = (r, side) => side === 1 ? r.phone1 : r.phone2;
+const notifiedOf = (r, side) => side === 1 ? r.notified1 : r.notified2;
+const waLink = (r, side) => `https://wa.me/${phoneOf(r, side)}?text=${encodeURIComponent(waMessage(r, side))}`;
+const waButton = (r, side) => {
+  const nom = prenom(side === 1 ? r.player : r.opponent);
+  if (!phoneOf(r, side)) return `<button class="btn btn-sec" disabled>${esc(nom)} : pas de numéro</button>`;
+  return `<button class="btn btn-wa ${notifiedOf(r, side) ? "sent" : ""}" ${btnData("wa", r.id + ":" + side)}>${notifiedOf(r, side) ? `✓ ${esc(nom)} prévenu` : `Prévenir ${esc(nom)}`}</button>`;
+};
+const waButtons = r => `<div class="row">${waButton(r, 1)}${waButton(r, 2)}</div>`;
+const resetNotified = r => { r.notified1 = false; r.notified2 = false; };
+const toNotify = r => [1, 2].filter(sd => phoneOf(r, sd) && !notifiedOf(r, sd)).length;
 
 function slotState(c, a, b) {
   const left = (c.capacity || DEFAULT_CAPACITY) - confirmedOn(c.date, c.time).length;
@@ -318,7 +345,7 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;",
 const btnData = (act, v = "") => `data-act="${act}" data-v="${esc(v)}"`;
 
 /* ===================== ÉTAT ===================== */
-const fresh = () => ({ step: "cat", hist: [], cat: null, groupe: null, poule: null, player: null, opp: null, slot: null, err: null, last: null, phone: "" });
+const fresh = () => ({ step: "cat", hist: [], cat: null, groupe: null, poule: null, player: null, opp: null, slot: null, err: null, last: null, phone1: "", phone2: "" });
 const adminFresh = () => ({ tab: "pending", val: null, court: null, refuse: null, refReason: null, cancel: null, msg: null, msgId: null });
 let S = { mode: "joueur", ...fresh(), ...adminFresh() };
 
@@ -405,20 +432,29 @@ function matchCard(cat, poolNom, a, b, date, time, extra = "") {
     <div class="side">${esc(a)}</div><div class="x">VS</div><div class="side">${esc(b)}</div>
     <div class="when"><span>${fmtDay(date)}${extra}</span><b>${fmtTime(time)}</b></div></div>`;
 }
+function contactField(side, entry, role) {
+  if (contactOf(entry))
+    return `<div class="known"><span>${role}</span><b>${esc(entry)}</b><em>✓ numéro connu du club</em></div>`;
+  const v = side === 1 ? S.phone1 : S.phone2;
+  const label = side === 1 ? `Votre portable (${esc(entry)})` : `Portable de ${esc(entry)}`;
+  return `<div class="field"><label for="phone${side}">${label}</label>
+    <input id="phone${side}" type="tel" inputmode="tel" autocomplete="${side === 1 ? "tel" : "off"}" placeholder="06 12 34 56 78" value="${esc(v)}"></div>`;
+}
 function vRecap() {
   const p = getPoule(S.poule), c = CRENEAUX[S.slot];
   return `<p class="q">Vérifiez votre demande</p><p class="sub">Le terrain sera attribué par le club.</p>` +
     matchCard(S.cat, p.nom, S.player, S.opp, c.date, c.time) +
-    `<div class="field"><label for="phone">Votre numéro de portable</label>
-      <input id="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="06 12 34 56 78" value="${esc(S.phone)}">
-      <p class="hint">Le club vous prévient sur WhatsApp quand le créneau est confirmé ou refusé. Numéro supprimé à la fin du tournoi.</p></div>` +
+    `<p class="ask-title">Prévenus sur WhatsApp à la confirmation</p>` +
+    contactField(1, S.player, S.cat === "mixte" ? "Votre équipe" : "Vous") +
+    contactField(2, S.opp, S.cat === "mixte" ? "Équipe adverse" : "Votre adversaire") +
+    `<p class="hint">Numéros utilisés uniquement pour le tournoi et supprimés à la fin.</p>` +
     (S.err ? `<div class="err">${S.err}</div>` : "") +
     `<button class="cta" ${btnData("send")}>ENVOYER LA DEMANDE</button>`;
 }
 function vDone() {
   const r = S.last;
   return `<div class="done"><div class="check">✓</div>
-    <h2>Demande envoyée au club</h2><p>Votre créneau doit maintenant être confirmé. Le club vous prévient sur WhatsApp au ${fmtPhone(r.phone)}.</p></div>` +
+    <h2>Demande envoyée au club</h2><p>Votre créneau doit maintenant être confirmé. Les deux joueurs seront prévenus sur WhatsApp.</p></div>` +
     matchCard(r.category, r.pool, r.player, r.opponent, r.date, r.time) +
     `<button class="cta dark" ${btnData("again")}>Faire une autre demande</button>
      <a class="cta dark jat" href="https://wa.me/${JAT_PHONE}" target="_blank" rel="noopener">Une question ? Écrire au juge-arbitre</a>
@@ -427,14 +463,21 @@ function vDone() {
 
 function submit() {
   const p = getPoule(S.poule), c = CRENEAUX[S.slot];
-  S.phone = document.getElementById("phone").value;
-  const phone = normPhone(S.phone);
-  if (!phone) { S.err = "Indiquez un numéro de portable valide (06 ou 07)."; return render(); }
+  const read = (side, entry) => {
+    const known = contactOf(entry);
+    if (known) return known;
+    const raw = document.getElementById("phone" + side).value;
+    if (side === 1) S.phone1 = raw; else S.phone2 = raw;
+    return normPhone(raw);
+  };
+  const phone1 = read(1, S.player), phone2 = read(2, S.opp);
+  if (!phone1) { S.err = "Indiquez votre numéro de portable (06 ou 07)."; return render(); }
+  if (!phone2) { S.err = `Indiquez le portable de ${esc(S.opp)} (06 ou 07).`; return render(); }
   if (findMatch(S.cat, p.nom, S.player, S.opp)) { S.err = "Une demande existe déjà pour ce match."; return render(); }
   const st = slotState(c, S.player, S.opp);
   if (st.type === "full") { S.err = "Ce créneau est complet. Revenez en arrière pour en choisir un autre."; return render(); }
   if (st.type === "conflict") { S.err = "Un des joueurs a déjà un match sur ce créneau. Choisissez-en un autre."; return render(); }
-  const r = { id: "r" + (++uid), category: S.cat, pool: p.nom, player: S.player, opponent: S.opp, date: c.date, time: c.time, status: "pending", court: null, phone, notified: false };
+  const r = { id: "r" + (++uid), category: S.cat, pool: p.nom, player: S.player, opponent: S.opp, date: c.date, time: c.time, status: "pending", court: null, phone1, phone2, notified1: false, notified2: false };
   requests.push(r);
   S.last = r; S.hist = []; S.step = "done"; S.err = null; render(); window.scrollTo(0, 0);
 }
@@ -443,7 +486,7 @@ function submit() {
 function vAdmin() {
   const by = s => requests.filter(r => s.includes(r.status));
   const pend = by(["pending"]), conf = by(["confirmed"]), other = by(["refused", "cancelled"]);
-  const aPrevenir = [...conf, ...other].filter(r => !r.notified).length;
+  const aPrevenir = [...conf, ...other].reduce((n, r) => n + toNotify(r), 0);
   const list = { pending: pend, confirmed: conf, other }[S.tab]
     .slice().sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
   const empty = { pending: "Aucune demande en attente.", confirmed: "Aucun match confirmé.", other: "Aucune demande refusée ou annulée." }[S.tab];
@@ -459,7 +502,7 @@ function vAdmin() {
       <button class="${S.tab === "other" ? "on" : ""}" ${btnData("tab", "other")}>Refusés</button>
     </div>
     ${aPrevenir ? `<div class="info">📱 ${aPrevenir} joueur${aPrevenir > 1 ? "s" : ""} à prévenir sur WhatsApp</div>` : ""}
-    ${S.msg ? `<div class="info">${S.msg}${S.msgId ? `<div class="row">${waButton(requests.find(x => x.id === S.msgId))}</div>` : ""}</div>` : ""}
+    ${S.msg ? `<div class="info">${S.msg}${S.msgId ? waButtons(requests.find(x => x.id === S.msgId)) : ""}</div>` : ""}
     ${list.length ? list.map(card).join("") : `<div class="empty">${empty}</div>`}`;
 }
 function card(r) {
@@ -470,7 +513,7 @@ function card(r) {
       ${r.status === "cancelled" ? `<span class="badge b-grey">Annulé</span>` : ""}</div>
     <div class="pool">${POULES[r.category].label}, ${r.pool}</div>
     <div class="when">${fmtDay(r.date)} à ${fmtTime(r.time)}</div>
-    <div class="contact">Demandé par ${esc(r.player)}, ${fmtPhone(r.phone)}</div>
+    <div class="contact">Demandé par ${esc(prenom(r.player))}. ${esc(prenom(r.player))} : ${r.phone1 ? fmtPhone(r.phone1) : "—"}, ${esc(prenom(r.opponent))} : ${r.phone2 ? fmtPhone(r.phone2) : "—"}</div>
     ${r.status === "refused" && r.reason ? `<div class="reason">Motif : ${esc(r.reason)}</div>` : ""}`;
   let body = "";
   if (r.status === "pending") {
@@ -503,9 +546,9 @@ function card(r) {
       ? `<p class="ask">Annuler ce match ? ${r.court} sera libéré.</p>
          <div class="row"><button class="btn btn-sec" ${btnData("canX")}>Retour</button>
          <button class="btn btn-no" ${btnData("canOk", r.id)}>Oui, annuler</button></div>`
-      : `<div class="row"><button class="btn btn-sec" ${btnData("can", r.id)}>Annuler le match</button>${waButton(r)}</div>`;
+      : `<div class="row"><button class="btn btn-sec" ${btnData("can", r.id)}>Annuler le match</button></div>${waButtons(r)}`;
   } else {
-    body = `<div class="row">${waButton(r)}</div>`;
+    body = waButtons(r);
   }
   return `<div class="card ${r.status}">${head}${body}</div>`;
 }
@@ -516,7 +559,7 @@ function confirmReq(id) {
   const used = confirmedOn(r.date, r.time);
   if (used.length >= capOf(r.date, r.time)) { S.msg = "Créneau complet : validation impossible."; return; }
   if (used.some(x => x.court === S.court)) { S.msg = `${S.court} est déjà pris sur ce créneau.`; return; }
-  r.status = "confirmed"; r.court = S.court; r.notified = false;
+  r.status = "confirmed"; r.court = S.court; resetNotified(r);
   S.msg = `✅ Match confirmé : ${esc(r.player)} contre ${esc(r.opponent)}, ${r.court}.`;
   S.msgId = r.id;
   S.val = null; S.court = null;
@@ -556,8 +599,9 @@ document.addEventListener("click", e => {
   const v = el.dataset.v, act = el.dataset.act;
   if (act === "wa") {
     e.preventDefault();
-    const r = requests.find(x => x.id === v);
-    if (r) { window.open(waLink(r), "_blank", "noopener"); r.notified = true; }
+    const [rid, sd] = v.split(":"), side = Number(sd);
+    const r = requests.find(x => x.id === rid);
+    if (r && phoneOf(r, side)) { window.open(waLink(r, side), "_blank", "noopener"); r["notified" + side] = true; }
     return render();
   }
   if (S.mode === "admin" && !["court", "reason"].includes(act)) { S.msg = null; S.msgId = null; }
@@ -583,7 +627,7 @@ document.addEventListener("click", e => {
     case "refOk": {
       const r = requests.find(x => x.id === v);
       if (r && r.status === "pending") {
-        r.status = "refused"; r.reason = S.refReason; r.notified = false;
+        r.status = "refused"; r.reason = S.refReason; resetNotified(r);
         S.msg = `❌ Demande refusée : ${esc(r.player)} contre ${esc(r.opponent)}.`; S.msgId = r.id;
       }
       S.refuse = null; S.refReason = null; break;
@@ -594,7 +638,7 @@ document.addEventListener("click", e => {
       const r = requests.find(x => x.id === v);
       if (r && r.status === "confirmed") {
         S.msg = `⚠️ Match annulé, ${r.court} libéré.`; S.msgId = r.id;
-        r.status = "cancelled"; r.notified = false;
+        r.status = "cancelled"; resetNotified(r);
       }
       S.cancel = null; break;
     }
@@ -603,6 +647,7 @@ document.addEventListener("click", e => {
   render();
 });
 
+requests = clone();
 render();
 </script>
 </body>

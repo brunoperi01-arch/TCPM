@@ -129,13 +129,18 @@ function vRecap() {
     (S.err ? `<div class="err">${S.err}</div>` : "") +
     `<button class="cta" ${S.sending ? "disabled" : ""} ${btnData("send")}>${S.sending ? "ENVOI…" : "ENVOYER LA DEMANDE"}</button>`;
 }
+function jatLink(r) {
+  const txt = `Bonjour Bruno, question sur ma demande du tournoi interne :\n` +
+    `${r.player} contre ${r.opponent} (${r.pool}), ${fmtDay(r.date).toLowerCase()} à ${fmtTime(r.time)}.\n\n`;
+  return `https://wa.me/${JAT_PHONE}?text=${encodeURIComponent(txt)}`;
+}
 function vDone() {
   const r = S.last;
   return `<div class="done"><div class="check">✓</div>
     <h2>Demande envoyée au club</h2><p>Votre créneau doit maintenant être confirmé. Les deux joueurs seront prévenus sur WhatsApp.</p></div>` +
     matchCard(r.catLabel, r.pool, r.player, r.opponent, r.date, r.time) +
     `<button class="cta dark" ${btnData("again")}>Faire une autre demande</button>
-     <a class="cta dark jat" href="https://wa.me/${JAT_PHONE}" target="_blank" rel="noopener">Une question ? Écrire au juge-arbitre</a>`;
+     <a class="cta dark jat" href="${jatLink(r)}" target="_blank" rel="noopener">Une question ? Écrire au juge-arbitre</a>`;
 }
 
 async function submit() {

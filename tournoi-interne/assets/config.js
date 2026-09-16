@@ -10,35 +10,41 @@ export const SIGNATURE = "Bruno Peri, juge-arbitre du tournoi";
 export const TERRAINS = ["Terrain 1", "Terrain 2", "Terrain 3", "Terrain 4", "Terrain 5", "Terrain 6"];
 export const MOTIFS = ["Créneau indisponible", "Erreur de joueur", "Match déjà programmé", "Autre"];
 
-// Structure des 10 poules (les noms des joueurs sont dans la base)
-export const POULES = {
-  hommes: {
-    label: "Hommes",
-    groupes: {
-      hautes: { label: "Poules hautes", poules: ["A", "B", "C"] },
-      basses: { label: "Poules basses", poules: ["A", "B"] },
-    },
-  },
-  femmes: { label: "Femmes", poules: ["A", "B", "C"] },
-  mixte: { label: "Double mixte", poules: ["A", "B"] },
+// Catégories et niveaux. Les poules elles-mêmes sont créées par l'import MOJA (base Neon).
+export const CATEGORIES = { hommes: "Hommes", femmes: "Femmes", mixte: "Double mixte" };
+export const LEVELS = {
+  elite:   { label: "Poules élite",  court: "Poule élite",  ordre: 1 },
+  haute:   { label: "Poules hautes", court: "Poule haute",  ordre: 2 },
+  basse:   { label: "Poules basses", court: "Poule basse",  ordre: 3 },
+  tableau: { label: "Tableau",       court: "Tableau",      ordre: 4 },
 };
 
-const NOMS = {
-  "hommes.hautes": (l) => `Poule Haute ${l}`,
-  "hommes.basses": (l) => `Poule Basse ${l}`,
-  femmes: (l) => `Poule Filles ${l}`,
-  mixte: (l) => `Poule Mixte ${l}`,
-};
+const sansAccent = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
-export const LISTE_POULES = Object.entries(POULES).flatMap(([cat, def]) => {
-  const blocs = def.groupes
-    ? Object.entries(def.groupes).map(([g, gd]) => [`${cat}.${g}`, g, gd.poules])
-    : [[cat, null, def.poules]];
-  return blocs.flatMap(([cle, groupe, lettres]) =>
-    lettres.map((lettre) => ({ id: `${cle}.${lettre}`, categorie: cat, groupe, lettre, nom: NOMS[cle](lettre) })));
-});
-export const getPoule = (id) => LISTE_POULES.find((p) => p.id === id) || null;
-export const getPouleByNom = (nom) => LISTE_POULES.find((p) => p.nom === nom) || null;
+/** "Simple Messieurs Senior" → "hommes" (ou null) */
+export function categoryFromText(txt) {
+  const t = sansAccent(txt);
+  if (/mixte/.test(t)) return "mixte";
+  if (/messieurs|hommes/.test(t)) return "hommes";
+  if (/dames|femmes|filles/.test(t)) return "femmes";
+  return null;
+}
+/** "Poules elites" → "elite" */
+export function levelFromText(txt) {
+  const t = sansAccent(txt);
+  if (/elite/.test(t)) return "elite";
+  if (/haut/.test(t)) return "haute";
+  if (/bas/.test(t)) return "basse";
+  if (/tableau/.test(t)) return "tableau";
+  return t.replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "autre";
+}
+export const levelInfo = (level) => LEVELS[level] || { label: level, court: level, ordre: 9 };
+export const poolId = (cat, level, n) => `${cat}.${level}.${n}`;
+export const poolNom = (cat, level, n) =>
+  level === "tableau" ? `${CATEGORIES[cat]} Tableau` : `${CATEGORIES[cat]} ${levelInfo(level).court} ${n}`;
+export const sortPools = (pools) => [...pools].sort((a, b) =>
+  Object.keys(CATEGORIES).indexOf(a.category) - Object.keys(CATEGORIES).indexOf(b.category) ||
+  levelInfo(a.level).ordre - levelInfo(b.level).ordre || a.number - b.number);
 
 /* ---------- Noms ---------- */
 export const clean = (s) => String(s ?? "").replace(/\s+/g, " ").trim();

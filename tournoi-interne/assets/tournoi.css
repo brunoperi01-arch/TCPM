@@ -212,3 +212,14 @@ select{width:100%;font-size:18px;padding:15px 12px}
 .stepper button:disabled{opacity:.3;cursor:not-allowed}
 .stepper span{width:26px;text-align:center;font-family:var(--cond);font-size:20px;font-weight:700;color:var(--ball)}
 .toggle{display:block;margin:18px auto 0;background:none;border:0;color:var(--glow);font-size:14px;font-weight:600;cursor:pointer;text-decoration:underline}
+.chips-title{font-family:var(--cond);font-size:14px;letter-spacing:.08em;text-transform:uppercase;color:var(--glow);margin:14px 0 6px}
+.chips.pools{margin:0 0 4px}
+.imp-pool{background:var(--dim);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-top:8px}
+.imp-pool textarea{margin-top:6px;font-size:14px}
+.imp-head{display:flex;align-items:center;gap:8px;color:#fff;font-size:14px;cursor:pointer;margin-top:12px;flex-wrap:wrap}
+.imp-pool .imp-head{margin-top:0}
+.imp-head small{color:var(--muted);font-weight:400}
+.imp-head input{width:20px;height:20px;accent-color:var(--ball)}
+input[type=file]{width:100%;font:inherit;font-size:14px;color:var(--muted);background:rgba(4,11,31,.7);border:1px dashed var(--line);border-radius:12px;padding:12px}
+input[type=file]::file-selector-button{font:inherit;font-weight:700;border:0;border-radius:8px;padding:8px 12px;margin-right:10px;background:var(--electric);color:var(--night);cursor:pointer}
+.toggle.danger{color:#ff8f9a}

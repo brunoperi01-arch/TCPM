@@ -1,6 +1,6 @@
 // Page joueur : demande de créneau
 import {
-  POULES, JAT_PHONE, LISTE_POULES, getPoule, estAVenir, isActive, pairKey, slotState, normPhone,
+  CATEGORIES, JAT_PHONE, levelInfo, estAVenir, isActive, pairKey, slotState, normPhone,
 } from "./config.js";
 import { esc, btnData, fmtDay, fmtShort, fmtTime, header, matchCard, api, onAction } from "./ui.js";
 
@@ -8,8 +8,12 @@ const app = document.getElementById("app");
 const fresh = () => ({ step: "cat", hist: [], cat: null, groupe: null, poule: null, player: null, opp: null,
   slot: null, err: null, last: null, phone1: "", phone2: "", sending: false });
 let S = fresh();
-let DATA = { requests: [], known: [], entries: {}, creneaux: [] };
+let DATA = { requests: [], known: [], pools: [], entries: {}, creneaux: [] };
 const entreesDe = (id) => DATA.entries[id] || [];
+const getPoule = (id) => DATA.pools.find((p) => p.id === id);
+const poolsOf = (cat, level) => DATA.pools.filter((p) => p.category === cat && (!level || p.level === level));
+const levelsOf = (cat) => [...new Set(poolsOf(cat).map((p) => p.level))];
+const ouverte = (p) => entreesDe(p.id).length >= 2;
 let loaded = false, loadError = null;
 
 async function load() {
@@ -24,7 +28,25 @@ const findMatch = (pool, a, b) =>
   DATA.requests.find((r) => isActive(r) && r.pool === pool && pairKey(r.player, r.opponent) === pairKey(a, b));
 const lastClosed = (pool, a, b) =>
   DATA.requests.filter((r) => !isActive(r) && r.pool === pool && pairKey(r.player, r.opponent) === pairKey(a, b)).pop();
-const flow = () => ["cat", ...(S.cat === "hommes" ? ["groupe"] : []), "poule", "player", "opp", "slot", "recap"];
+const flow = () => [
+  "cat",
+  ...(S.cat && levelsOf(S.cat).length > 1 ? ["groupe"] : []),
+  ...(S.cat && S.groupe && (poolsOf(S.cat, S.groupe).length > 1 || !ouverte(poolsOf(S.cat, S.groupe)[0])) ? ["poule"] : []),
+  "player", "opp", "slot", "recap",
+];
+
+/** Choix de catégorie / niveau : passe automatiquement les étapes sans alternative */
+function suite() {
+  const levels = levelsOf(S.cat);
+  if (!S.groupe) {
+    if (levels.length > 1) return go("groupe");
+    S.groupe = levels[0];
+  }
+  const pools = poolsOf(S.cat, S.groupe);
+  if (pools.length > 1 || !ouverte(pools[0])) return go("poule");
+  S.poule = pools[0].id;
+  return go("player");
+}
 
 function go(step) {
   S.hist.push(S.step); S.step = step; S.err = null; render(); window.scrollTo(0, 0);
@@ -34,28 +56,31 @@ function back() { S.step = S.hist.pop() || "cat"; S.err = null; render(); }
 
 /* ---------- Écrans ---------- */
 function vCat() {
-  return `<p class="q">Choisissez votre catégorie</p><p class="sub">Demande de créneau pour votre match de poule</p>` +
-    Object.entries(POULES).map(([k, d]) => {
-      const info = d.groupes ? "Poules hautes et poules basses" : `${Object.keys(d.poules).length} poules`;
-      return `<button class="big" ${btnData("cat", k)}><span>${d.label}<small>${info}</small></span><span class="chev">›</span></button>`;
+  const cats = Object.entries(CATEGORIES).filter(([k]) => poolsOf(k).length);
+  if (!cats.length) return `<div class="empty">Les poules ne sont pas encore publiées. Revenez bientôt 🎾</div>`;
+  return `<p class="q">Choisissez votre catégorie</p><p class="sub">Demande de créneau pour votre match</p>` +
+    cats.map(([k, label]) => {
+      const levels = levelsOf(k);
+      const info = levels.length > 1 ? levels.map((l) => levelInfo(l).label).join(", ")
+        : levels[0] === "tableau" ? "Tableau" : `${poolsOf(k).length} poule${poolsOf(k).length > 1 ? "s" : ""}`;
+      return `<button class="big" ${btnData("cat", k)}><span>${label}<small>${info}</small></span><span class="chev">›</span></button>`;
     }).join("");
 }
 function vGroupe() {
-  return `<p class="q">Choisissez votre niveau</p><p class="sub">Hommes</p>` +
-    Object.entries(POULES.hommes.groupes).map(([k, d]) =>
-      `<button class="big" ${btnData("groupe", k)}><span>${d.label}<small>Poules ${Object.keys(d.poules).join(", ")}</small></span><span class="chev">›</span></button>`
-    ).join("");
+  return `<p class="q">Choisissez votre niveau</p><p class="sub">${CATEGORIES[S.cat]}</p>` +
+    levelsOf(S.cat).map((l) => {
+      const n = poolsOf(S.cat, l).length;
+      return `<button class="big" ${btnData("groupe", l)}><span>${levelInfo(l).label}<small>${n} poule${n > 1 ? "s" : ""}</small></span><span class="chev">›</span></button>`;
+    }).join("");
 }
 function vPoule() {
-  const list = LISTE_POULES.filter((p) => p.categorie === S.cat && (S.cat !== "hommes" || p.groupe === S.groupe));
-  const titre = S.cat === "hommes" ? `Hommes, ${POULES.hommes.groupes[S.groupe].label.toLowerCase()}` : POULES[S.cat].label;
   const unite = S.cat === "mixte" ? "équipes" : "joueurs";
-  return `<p class="q">Choisissez votre poule</p><p class="sub">${titre}</p>` +
-    list.map((p) => {
-      const n = entreesDe(p.id).length, open = n >= 2;
+  return `<p class="q">Choisissez votre poule</p><p class="sub">${CATEGORIES[S.cat]}, ${levelInfo(S.groupe).label.toLowerCase()}</p>` +
+    poolsOf(S.cat, S.groupe).map((p) => {
+      const n = entreesDe(p.id).length, open = ouverte(p);
       return `<button class="big letter" ${open ? "" : "disabled"} ${btnData("poule", p.id)}>
-        <span class="l">${p.lettre}</span>
-        <span class="grow">${p.nom}<small>${open ? `${n} ${unite}` : "Composition à venir"}</small></span>
+        <span class="l">${p.number}</span>
+        <span class="grow">${esc(p.nom)}<small>${open ? `${n} ${unite}` : "Composition à venir"}</small></span>
         ${open ? '<span class="chev">›</span>' : ""}</button>`;
     }).join("");
 }
@@ -120,7 +145,7 @@ function contactField(side, entry, role) {
 function vRecap() {
   const p = getPoule(S.poule), c = S.slot, mixte = S.cat === "mixte";
   return `<p class="q">Vérifiez votre demande</p><p class="sub">Le terrain sera attribué par le club.</p>` +
-    matchCard(POULES[S.cat].label, p.nom, S.player, S.opp, c.date, c.time) +
+    matchCard(CATEGORIES[S.cat], p.nom, S.player, S.opp, c.date, c.time) +
     `<p class="ask-title">Prévenus sur WhatsApp à la confirmation</p>` +
     contactField(1, S.player, mixte ? "Votre équipe" : "Vous") +
     contactField(2, S.opp, mixte ? "Équipe adverse" : "Votre adversaire") +
@@ -162,7 +187,7 @@ async function submit() {
       poolId: p.id, player: S.player, opponent: S.opp, date: c.date, time: c.time,
       phone1, phone2, website: document.getElementById("website")?.value || "",
     }});
-    S.last = { catLabel: POULES[S.cat].label, pool: p.nom, player: S.player, opponent: S.opp, date: c.date, time: c.time };
+    S.last = { catLabel: CATEGORIES[S.cat], pool: p.nom, player: S.player, opponent: S.opp, date: c.date, time: c.time };
     S.hist = []; S.step = "done";
     load();
   } catch (e) {
@@ -189,8 +214,8 @@ function render() {
 
 onAction((act, v) => {
   switch (act) {
-    case "cat": S.cat = v; return go(v === "hommes" ? "groupe" : "poule");
-    case "groupe": S.groupe = v; return go("poule");
+    case "cat": S.cat = v; S.groupe = null; S.poule = null; return suite();
+    case "groupe": S.groupe = v; S.poule = null; return suite();
     case "poule": S.poule = v; return go("player");
     case "player": S.player = v; return go("opp");
     case "opp": S.opp = v; return go("slot");

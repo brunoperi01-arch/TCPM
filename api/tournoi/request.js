@@ -1,9 +1,9 @@
 // POST /api/tournoi/request — création d'une demande (statut pending)
 // Tout est revérifié ici : le navigateur n'est jamais cru sur parole.
 import { withTx, sendError, HttpError, body } from "../_lib/db.js";
-import { loadData, fromClient, contactOf } from "../_lib/data.js";
+import { loadData, fromClient, contactOf, findPool } from "../_lib/data.js";
 import {
-  getPoule, estAVenir, clean, normPhone, slotState, DATE_RE, TIME_RE,
+  estAVenir, clean, normPhone, slotState, DATE_RE, TIME_RE,
 } from "../../tournoi-interne/assets/config.js";
 
 export default async function handler(req, res) {
@@ -14,14 +14,14 @@ export default async function handler(req, res) {
     // Anti-robot : champ invisible rempli = on fait semblant d'accepter
     if (b.website) return res.status(200).json({ ok: true });
 
-    const poule = getPoule(b.poolId);
-    if (!poule) throw new HttpError(400, "Poule inconnue.");
     const player = clean(b.player), opponent = clean(b.opponent);
     if (player === opponent) throw new HttpError(400, "Vous ne pouvez pas jouer contre vous-même.");
     if (!DATE_RE.test(b.date) || !TIME_RE.test(b.time)) throw new HttpError(400, "Créneau invalide.");
 
     const id = await withTx(async (db) => {
       const data = await loadData(fromClient(db));
+      const poule = findPool(data, b.poolId);
+      if (!poule) throw new HttpError(400, "Poule inconnue.");
       const entrees = data.entries[poule.id] || [];
       if (!entrees.includes(player) || !entrees.includes(opponent))
         throw new HttpError(400, "Joueur inconnu dans cette poule.");
@@ -62,7 +62,7 @@ export default async function handler(req, res) {
            (category, pool, player, opponent, requested_date, requested_time, phone1, phone2)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          RETURNING id`,
-        [poule.categorie, poule.nom, player, opponent, creneau.date, creneau.time, phone1, phone2]);
+        [poule.category, poule.nom, player, opponent, creneau.date, creneau.time, phone1, phone2]);
       return rows[0].id;
     });
 

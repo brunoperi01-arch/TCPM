@@ -1,13 +1,14 @@
 // Données gérées depuis l'admin : joueurs des poules, créneaux, numéros.
 // Serveur uniquement : les numéros ne sortent que vers l'admin protégé.
-import { joueursDe } from "../../tournoi-interne/assets/config.js";
+import { joueursDe, sortPools } from "../../tournoi-interne/assets/config.js";
 
 /** q = (texte SQL, paramètres) => lignes */
 export const fromSql = (sql) => (t, p = []) => sql.query(t, p);
 export const fromClient = (client) => async (t, p = []) => (await client.query(t, p)).rows;
 
 export async function loadData(q) {
-  const [entryRows, slots, contactRows] = await Promise.all([
+  const [poolRows, entryRows, slots, contactRows] = await Promise.all([
+    q(`SELECT id, category, level, number, nom FROM pools`),
     q(`SELECT pool_id, name FROM pool_entries ORDER BY pool_id, id`),
     q(`SELECT id::text AS id, to_char(slot_date, 'YYYY-MM-DD') AS date,
               to_char(slot_time, 'HH24:MI') AS time, capacity, active
@@ -17,7 +18,8 @@ export async function loadData(q) {
   const entries = {};
   for (const r of entryRows) (entries[r.pool_id] ||= []).push(r.name);
   const contacts = Object.fromEntries(contactRows.map((r) => [r.name, r.phone]));
-  return { entries, slots, contacts };
+  const pools = sortPools(poolRows.map((r) => ({ ...r, number: Number(r.number) })));
+  return { pools, entries, slots, contacts };
 }
 
 /** Numéro d'une entrée (joueur, ou premier joueur connu d'une équipe mixte) */
@@ -27,3 +29,5 @@ export const contactOf = (contacts, entree) =>
 /** Noms d'entrées dont le numéro est connu (jamais les numéros eux-mêmes) */
 export const entreesConnues = (data) =>
   [...new Set(Object.values(data.entries).flat())].filter((e) => contactOf(data.contacts, e));
+
+export const findPool = (data, id) => data.pools.find((p) => p.id === id) || null;

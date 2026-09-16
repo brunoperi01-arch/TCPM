@@ -3,7 +3,7 @@ import { withTx, sendError, HttpError, body } from "../_lib/db.js";
 import { requireAdmin } from "../_lib/auth.js";
 import { loadData, fromClient } from "../_lib/data.js";
 import {
-  getPoule, formatEntree, erreurEntree, joueursDe, normPhone, clean,
+  formatEntree, erreurEntree, joueursDe, normPhone, clean, CATEGORIES, poolId, poolNom,
   DATE_RE, TIME_RE, TERRAINS,
 } from "../../tournoi-interne/assets/config.js";
 
@@ -15,16 +15,98 @@ function parseLine(line) {
   return { nom: formatEntree(nom), tels };
 }
 
+async function getPool(db, id) {
+  const { rows } = await db.query(`SELECT id, category, level, number, nom FROM pools WHERE id = $1`, [String(id || "")]);
+  if (!rows[0]) throw new HttpError(400, "Poule inconnue.");
+  return { ...rows[0], categorie: rows[0].category };
+}
+
+async function upsertContact(db, name, tel) {
+  await db.query(
+    `INSERT INTO player_contacts (name, phone) VALUES ($1, $2)
+     ON CONFLICT (name) DO UPDATE SET phone = EXCLUDED.phone, updated_at = now()`, [name, tel]);
+}
+
 async function hasRequests(db, sqlWhere, params) {
   const { rows } = await db.query(`SELECT 1 FROM match_requests WHERE ${sqlWhere} LIMIT 1`, params);
   return rows.length > 0;
 }
 
 const handlers = {
+  // Import MOJA : crée / met à jour les poules, leurs joueurs et les numéros
+  async import(db, b) {
+    const pools = Array.isArray(b.pools) ? b.pools : [];
+    if (!pools.length || pools.length > 40) throw new HttpError(400, "Aucune poule à importer.");
+    const report = { pools: 0, added: 0, removed: 0, phones: 0, kept: [], errors: [] };
+    const ids = [];
+
+    for (const p of pools) {
+      const number = Number(p.number);
+      if (!CATEGORIES[p.category] || !/^[a-z0-9-]{1,20}$/.test(p.level) || !(number >= 1 && number <= 99))
+        throw new HttpError(400, "Poule invalide dans l'import.");
+      const id = poolId(p.category, p.level, number), nom = poolNom(p.category, p.level, number);
+      ids.push(id);
+      await db.query(
+        `INSERT INTO pools (id, category, level, number, nom) VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (id) DO UPDATE SET nom = EXCLUDED.nom`, [id, p.category, p.level, number, nom]);
+      report.pools++;
+
+      const entries = (Array.isArray(p.entries) ? p.entries : []).slice(0, 40).map(formatEntree);
+      const valides = [];
+      for (const e of entries) {
+        const err = erreurEntree(p.category, e);
+        if (err) { report.errors.push(`${nom} : « ${e} » ${err}`); continue; }
+        valides.push(e);
+        const { rowCount } = await db.query(
+          `INSERT INTO pool_entries (pool_id, name) VALUES ($1, $2) ON CONFLICT DO NOTHING`, [id, e]);
+        report.added += rowCount;
+      }
+      if (b.replace) {
+        const { rows } = await db.query(`SELECT name FROM pool_entries WHERE pool_id = $1`, [id]);
+        for (const { name } of rows.filter((r) => !valides.includes(r.name))) {
+          if (await hasRequests(db, "pool = $1 AND (player = $2 OR opponent = $2)", [nom, name])) {
+            report.kept.push(`${name} (${nom})`);
+          } else {
+            await db.query(`DELETE FROM pool_entries WHERE pool_id = $1 AND name = $2`, [id, name]);
+            report.removed++;
+          }
+        }
+      }
+    }
+
+    if (b.replace) {
+      const { rows: old } = await db.query(`SELECT id, nom FROM pools WHERE NOT (id = ANY($1))`, [ids]);
+      for (const o of old) {
+        if (await hasRequests(db, "pool = $1", [o.nom])) { report.kept.push(o.nom); continue; }
+        await db.query(`DELETE FROM pool_entries WHERE pool_id = $1`, [o.id]);
+        await db.query(`DELETE FROM pools WHERE id = $1`, [o.id]);
+      }
+      // Anciens noms sans poule (structure précédente)
+      await db.query(`DELETE FROM pool_entries WHERE pool_id NOT IN (SELECT id FROM pools)`);
+    }
+
+    const contacts = b.contacts && typeof b.contacts === "object" ? Object.entries(b.contacts).slice(0, 400) : [];
+    for (const [name, tel] of contacts) {
+      const n = clean(name), t = normPhone(tel);
+      if (!n || joueursDe(n).length !== 1 || !t) continue;
+      await upsertContact(db, n, t);
+      report.phones++;
+    }
+    return { report };
+  },
+
+  async pool_delete(db, b) {
+    const poule = await getPool(db, b.poolId);
+    if (await hasRequests(db, "pool = $1", [poule.nom]))
+      throw new HttpError(409, "Impossible : des demandes existent pour cette poule.");
+    await db.query(`DELETE FROM pool_entries WHERE pool_id = $1`, [poule.id]);
+    await db.query(`DELETE FROM pools WHERE id = $1`, [poule.id]);
+    return {};
+  },
+
   // Ajout en masse de joueurs / équipes dans une poule (+ numéros facultatifs)
   async entry_add(db, b) {
-    const poule = getPoule(b.poolId);
-    if (!poule) throw new HttpError(400, "Poule inconnue.");
+    const poule = await getPool(db, b.poolId);
     const lines = String(b.text || "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
     if (!lines.length) throw new HttpError(400, "Aucun nom saisi.");
     if (lines.length > MAX_LINES) throw new HttpError(400, `${MAX_LINES} lignes maximum à la fois.`);
@@ -43,9 +125,7 @@ const handlers = {
         if (!tels[i]) continue;
         const tel = normPhone(tels[i]);
         if (!tel) { report.errors.push(`${joueurs[i]} : numéro invalide (${tels[i]})`); continue; }
-        await db.query(
-          `INSERT INTO player_contacts (name, phone) VALUES ($1, $2)
-           ON CONFLICT (name) DO UPDATE SET phone = EXCLUDED.phone, updated_at = now()`, [joueurs[i], tel]);
+        await upsertContact(db, joueurs[i], tel);
         report.phones++;
       }
     }
@@ -53,8 +133,7 @@ const handlers = {
   },
 
   async entry_rename(db, b) {
-    const poule = getPoule(b.poolId);
-    if (!poule) throw new HttpError(400, "Poule inconnue.");
+    const poule = await getPool(db, b.poolId);
     const oldName = clean(b.name), newName = formatEntree(b.newName);
     const err = erreurEntree(poule.categorie, newName);
     if (err) throw new HttpError(400, err);
@@ -68,8 +147,7 @@ const handlers = {
   },
 
   async entry_delete(db, b) {
-    const poule = getPoule(b.poolId);
-    if (!poule) throw new HttpError(400, "Poule inconnue.");
+    const poule = await getPool(db, b.poolId);
     const name = clean(b.name);
     if (await hasRequests(db, "pool = $1 AND (player = $2 OR opponent = $2)", [poule.nom, name]))
       throw new HttpError(409, "Impossible : des demandes existent déjà pour ce nom.");
@@ -128,9 +206,7 @@ const handlers = {
     }
     const tel = normPhone(b.phone);
     if (!tel) throw new HttpError(400, "Numéro invalide (portable 06 ou 07).");
-    await db.query(
-      `INSERT INTO player_contacts (name, phone) VALUES ($1, $2)
-       ON CONFLICT (name) DO UPDATE SET phone = EXCLUDED.phone, updated_at = now()`, [name, tel]);
+    await upsertContact(db, name, tel);
     return {};
   },
 };

@@ -65,6 +65,15 @@ CREATE TABLE IF NOT EXISTS player_contacts (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS pools (
+  id text PRIMARY KEY,
+  category text NOT NULL CHECK (category IN ('hommes', 'femmes', 'mixte')),
+  level text NOT NULL,
+  number int NOT NULL,
+  nom text NOT NULL UNIQUE,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
 -- ------------------------------------------------------------
 -- FIN DU TOURNOI (à lancer à la main, après export CSV) :
 -- UPDATE match_requests SET phone1 = NULL, phone2 = NULL;

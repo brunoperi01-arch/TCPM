@@ -21,3 +21,12 @@ CREATE TABLE IF NOT EXISTS player_contacts (
   phone text NOT NULL CHECK (phone ~ '^33[67][0-9]{8}$'),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
+
+CREATE TABLE IF NOT EXISTS pools (
+  id text PRIMARY KEY,
+  category text NOT NULL CHECK (category IN ('hommes', 'femmes', 'mixte')),
+  level text NOT NULL,
+  number int NOT NULL,
+  nom text NOT NULL UNIQUE,
+  created_at timestamptz NOT NULL DEFAULT now()
+);

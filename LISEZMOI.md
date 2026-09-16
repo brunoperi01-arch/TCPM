@@ -43,7 +43,9 @@ db/schema.sql                       table à créer dans Neon
 
 ## Pendant le tournoi (tout se fait dans l'admin)
 
-- **Poules** : coller les noms depuis MOJA, un par ligne, numéro facultatif après « ; ».
+- **Import MOJA** (onglet Poules) : fichier « Tableau » + « Liste des joueurs ».
+  Aperçu modifiable avant enregistrement. Réimporter après un changement dans MOJA.
+- **Poules** : ajout manuel possible, un nom par ligne, numéro facultatif après « ; ».
   Mixte : `Joueur / Joueuse ; tél 1 ; tél 2`.
 - **Créneaux** : date, heure, nombre de terrains. Boutons − / + pour la capacité,
   👁 pour masquer un créneau aux joueurs, 🗑 pour supprimer (seulement s'il n'a aucune demande).

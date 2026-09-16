@@ -2,24 +2,26 @@
 // Les appels passent par /tournoi-interne/admin/api/* (même dossier que la page,
 // ce qui garantit que le navigateur renvoie l'identifiant saisi).
 import {
-  POULES, LISTE_POULES, TERRAINS, MOTIFS, FORM_URL, SIGNATURE, prenom, fmtPhone, joueursDe,
-  getPoule, estAVenir,
+  CATEGORIES, TERRAINS, MOTIFS, FORM_URL, SIGNATURE, prenom, fmtPhone, joueursDe, estAVenir, levelInfo,
 } from "./config.js";
+import { readXlsx, parseTableau, parseListe, construireImport } from "./moja.js";
 import { esc, btnData, fmtDay, fmtShort, fmtTime, header, api, onAction } from "./ui.js";
 
 const API = "/tournoi-interne/admin/api";
 const app = document.getElementById("app");
 let requests = [];
-let D = { entries: {}, slots: [], contacts: {} };
+let D = { pools: [], entries: {}, slots: [], contacts: {} };
+const getPoule = (id) => D.pools.find((p) => p.id === id);
 let loaded = false, loadError = null, busy = false;
 let S = { section: "demandes", tab: "pending", val: null, court: null, refuse: null, refReason: null, cancel: null,
-  msg: null, msgId: null, err: null, pool: LISTE_POULES[0].id, poolText: "", rename: null, report: null,
+  msg: null, msgId: null, err: null, pool: null, poolText: "", imp: null, impOpen: false, rename: null, report: null,
   slotForm: { date: "", time: "18:00", capacity: 2 }, showPast: false, contactFilter: "missing" };
 
 async function load() {
   try {
     const r = await api(`${API}/requests`);
-    requests = r.requests; D = { entries: r.entries, slots: r.slots, contacts: r.contacts };
+    requests = r.requests; D = { pools: r.pools, entries: r.entries, slots: r.slots, contacts: r.contacts };
+    if (!getPoule(S.pool)) S.pool = D.pools[0]?.id ?? null;
     loadError = null;
   } catch (e) { loadError = e.message; }
   loaded = true; render();
@@ -33,6 +35,7 @@ async function manage(payload, okMsg) {
   try {
     const r = await api(`${API}/manage`, { method: "POST", body: payload });
     D = r.data;
+    if (!getPoule(S.pool)) S.pool = D.pools[0]?.id ?? null;
     if (okMsg) S.msg = typeof okMsg === "function" ? okMsg(r) : okMsg;
     return r;
   } catch (e) {
@@ -63,7 +66,7 @@ async function action(payload, okMsg) {
 /* ---------- WhatsApp ---------- */
 const phoneOf = (r, side) => (side === 1 ? r.phone1 : r.phone2);
 const notifiedOf = (r, side) => (side === 1 ? r.notified1 : r.notified2);
-const catLabel = (c) => POULES[c]?.label ?? c;
+const catLabel = (c) => CATEGORIES[c] ?? c;
 
 function waMessage(r, side) {
   const moi = side === 1 ? r.player : r.opponent;
@@ -96,7 +99,7 @@ function card(r) {
       ${r.status === "confirmed" ? `<span class="badge b-conf">${esc(r.court)}</span>` : ""}
       ${r.status === "refused" ? `<span class="badge b-full">Refusé</span>` : ""}
       ${r.status === "cancelled" ? `<span class="badge b-grey">Annulé</span>` : ""}</div>
-    <div class="pool">${catLabel(r.category)}, ${esc(r.pool)}</div>
+    <div class="pool">${esc(r.pool)}</div>
     <div class="when">${fmtDay(r.date)} à ${fmtTime(r.time)}</div>
     <div class="contact">${esc(prenom(r.player))} : ${fmtPhone(r.phone1)}, ${esc(prenom(r.opponent))} : ${fmtPhone(r.phone2)}</div>
     ${r.status === "refused" && r.reason ? `<div class="reason">Motif : ${esc(r.reason)}</div>` : ""}`;
@@ -167,16 +170,61 @@ function vDemandes() {
 const requestsForName = (poolNom, name) =>
   requests.filter((r) => r.pool === poolNom && (r.player === name || r.opponent === name)).length;
 
+function vImport() {
+  const imp = S.imp;
+  if (!S.impOpen) {
+    return `<button class="cta dark" ${btnData("impOpen")}>📥 Importer depuis MOJA</button>`;
+  }
+  let preview = "";
+  if (imp) {
+    const nbNoms = imp.pools.reduce((n, p) => n + p.entries.length, 0);
+    const tous = [...new Set(imp.pools.flatMap((p) => p.entries.flatMap(joueursDe)))];
+    const sansTel = tous.filter((n) => !imp.contacts[n] && !D.contacts[n]);
+    preview = `
+      <div class="info">${imp.pools.length} groupes, ${nbNoms} ${nbNoms > 1 ? "inscriptions" : "inscription"}, ${Object.keys(imp.contacts).length} numéros trouvés.
+        ${sansTel.length ? `<div class="reason">Sans numéro : ${sansTel.map(esc).join(", ")}</div>` : ""}
+        ${imp.absents?.length ? `<div class="reason">Inscrits absents des poules : ${imp.absents.map(esc).join(", ")}</div>` : ""}
+        ${imp.warnings.length ? `<div class="reason">${imp.warnings.map(esc).join("<br>")}</div>` : ""}</div>
+      ${imp.pools.map((p, i) => `<div class="imp-pool">
+        <label class="imp-head"><input type="checkbox" data-imp-pool="${i}" ${p.skip ? "" : "checked"}> <b>${esc(p.nom)}</b> <small>${p.entries.length}</small></label>
+        <textarea data-imp-entries="${i}" rows="${Math.min(Math.max(p.entries.length, 2), 12)}">${esc(p.entries.join("\n"))}</textarea>
+      </div>`).join("")}
+      <label class="imp-head"><input type="checkbox" id="impReplace" ${imp.replace ? "checked" : ""}>
+        Remplacer la composition actuelle <small>(retire les noms et poules absents de l'import, sauf ceux qui ont déjà des demandes)</small></label>
+      <div class="row"><button class="btn btn-sec" ${btnData("impCancel")}>Annuler</button>
+        <button class="btn btn-ok" ${busy ? "disabled" : ""} ${btnData("impSave")}>ENREGISTRER</button></div>`;
+  }
+  return `<div class="login">
+    <p class="ask-title" style="margin-top:0">Importer depuis MOJA</p>
+    <div class="field"><label for="impTableau">1. Fichier « Tableau » (.xlsx)</label><input id="impTableau" type="file" accept=".xlsx"></div>
+    <div class="field"><label for="impListe">2. « Liste des joueurs » (.xlsx), pour les prénoms du mixte et les téléphones</label><input id="impListe" type="file" accept=".xlsx"></div>
+    <p class="hint">Les fichiers sont lus sur cet appareil : seuls les noms et les téléphones sont enregistrés.</p>
+    ${imp ? "" : `<div class="row"><button class="btn btn-sec" ${btnData("impCancel")}>Fermer</button>
+      <button class="btn btn-ok" ${btnData("impRead")}>LIRE LES FICHIERS</button></div>`}
+    ${preview}
+  </div>`;
+}
+
 function vPoules() {
-  const p = getPoule(S.pool), list = D.entries[p.id] || [], mixte = p.categorie === "mixte";
-  const chips = LISTE_POULES.map((x) => {
-    const n = (D.entries[x.id] || []).length;
-    return `<button class="chip pool ${x.id === S.pool ? "on" : ""}" ${btnData("pool", x.id)}>${x.nom.replace("Poule ", "")} <b>${n}</b></button>`;
+  const imp = vImport();
+  if (!D.pools.length) {
+    return `<p class="q">Poules</p><p class="sub">Aucune poule pour l'instant. Commencez par importer l'export MOJA.</p>` + imp;
+  }
+  const p = getPoule(S.pool), list = D.entries[p.id] || [], mixte = p.category === "mixte";
+  const chips = Object.entries(CATEGORIES).map(([cat, label]) => {
+    const pools = D.pools.filter((x) => x.category === cat);
+    if (!pools.length) return "";
+    return `<p class="chips-title">${label}</p><div class="chips pools">` + pools.map((x) => {
+      const n = (D.entries[x.id] || []).length;
+      const short = x.level === "tableau" ? "Tableau" : `${levelInfo(x.level).court.replace("Poule ", "")} ${x.number}`;
+      return `<button class="chip pool ${x.id === S.pool ? "on" : ""}" ${btnData("pool", x.id)}>${esc(short)} <b>${n}</b></button>`;
+    }).join("") + `</div>`;
   }).join("");
   const rows = list.map((name) => {
     const nReq = requestsForName(p.nom, name);
     const tels = joueursDe(name).map((j) => D.contacts[j]);
     const telTxt = tels.every(Boolean) ? `<span class="ok">✓ ${tels.map(fmtPhone).join(" · ")}</span>`
+      : tels.some(Boolean) ? `<span class="ok">✓ ${fmtPhone(tels.find(Boolean))}</span>`
       : `<span class="ko">numéro manquant</span>`;
     if (S.rename === name) {
       return `<div class="line"><input id="renameInput" value="${esc(name)}" class="inline">
@@ -190,20 +238,22 @@ function vPoules() {
            <button class="icon" ${btnData("del", name)} aria-label="Supprimer">🗑</button>`}</div>`;
   }).join("");
   const r = S.report;
-  return `<div class="chips pools">${chips}</div>
-    <p class="q">${p.nom}</p>
-    <p class="sub">${list.length} ${mixte ? "équipe" : "joueur"}${list.length > 1 ? "s" : ""}${list.length < 2 ? " · la poule reste fermée aux joueurs tant qu'il y a moins de 2 noms" : ""}</p>
+  const poolLocked = requests.some((x) => x.pool === p.nom);
+  return `${imp}${chips}
+    <p class="q" style="margin-top:14px">${esc(p.nom)}</p>
+    <p class="sub">${list.length} ${mixte ? "équipe" : "joueur"}${list.length > 1 ? "s" : ""}${list.length < 2 ? " · fermée aux joueurs tant qu'il y a moins de 2 noms" : ""}</p>
     ${r ? `<div class="info">${r.added.length} ajouté${r.added.length > 1 ? "s" : ""}${r.existing.length ? `, ${r.existing.length} déjà présent${r.existing.length > 1 ? "s" : ""}` : ""}${r.phones ? `, ${r.phones} numéro${r.phones > 1 ? "s" : ""} enregistré${r.phones > 1 ? "s" : ""}` : ""}.
       ${r.errors.length ? `<div class="reason">${r.errors.map(esc).join("<br>")}</div>` : ""}</div>` : ""}
     <div class="list">${rows || `<div class="empty">Aucun nom pour l'instant.</div>`}</div>
     <div class="login">
       <p class="ask-title" style="margin-top:0">Ajouter ${mixte ? "des équipes" : "des joueurs"}</p>
-      <textarea id="poolText" rows="5" placeholder="${mixte
-        ? "Bruno Peri / Sophie Rossi ; 06 12 34 56 78 ; 06 98 76 54 32\nJean Dupont / Marie Martin"
-        : "Bruno Peri ; 06 12 34 56 78\nJean Dupont"}">${esc(S.poolText)}</textarea>
-      <p class="hint">Un ${mixte ? "binôme" : "joueur"} par ligne, copié depuis MOJA. Numéro facultatif après « ; »${mixte ? " (un par joueur)" : ""}.</p>
+      <textarea id="poolText" rows="4" placeholder="${mixte
+        ? "Bruno Peri / Sophie Le Garrec ; 06 12 34 56 78 ; 06 98 76 54 32"
+        : "Bruno Peri ; 06 12 34 56 78"}">${esc(S.poolText)}</textarea>
+      <p class="hint">Un ${mixte ? "binôme" : "joueur"} par ligne. Numéro facultatif après « ; »${mixte ? " (un par joueur)" : ""}.</p>
       <button class="cta" ${busy ? "disabled" : ""} ${btnData("addEntries")}>AJOUTER</button>
-    </div>`;
+    </div>
+    ${poolLocked ? "" : `<button class="toggle danger" ${btnData("delPool", p.id)}>Supprimer ${esc(p.nom)}</button>`}`;
 }
 
 /* ---------- Créneaux ---------- */
@@ -282,6 +332,15 @@ function vAdmin() {
 function render() {
   const ta = document.getElementById("poolText");
   if (ta) S.poolText = ta.value;
+  if (S.imp) {
+    S.imp.pools.forEach((p, i) => {
+      const cb = document.querySelector(`[data-imp-pool="${i}"]`), tx = document.querySelector(`[data-imp-entries="${i}"]`);
+      if (cb) p.skip = !cb.checked;
+      if (tx) p.entries = tx.value.split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
+    });
+    const rp = document.getElementById("impReplace");
+    if (rp) S.imp.replace = rp.checked;
+  }
   let body;
   if (!loaded) body = `<div class="loading">Chargement…</div>`;
   else if (loadError) body = `<div class="err">${esc(loadError)}</div><button class="cta dark" ${btnData("reload")}>Réessayer</button>`;
@@ -320,6 +379,59 @@ onAction(async (act, v, e) => {
       try { await api(`${API}/action`, { method: "POST", body: { action: "notified", id, side } }); }
       catch (err) { S.err = `Envoi ouvert, mais « prévenu » non enregistré : ${err.message}`; render(); }
       return;
+    }
+
+    /* Import MOJA */
+    case "impOpen": S.impOpen = true; S.imp = null; break;
+    case "impCancel": S.impOpen = false; S.imp = null; break;
+    case "impRead": {
+      const ft = document.getElementById("impTableau").files[0];
+      const fl = document.getElementById("impListe").files[0];
+      if (!ft) { S.err = "Choisissez le fichier « Tableau » exporté de MOJA."; break; }
+      busy = true; render();
+      try {
+        const blocs = parseTableau(await readXlsx(ft));
+        const joueurs = fl ? parseListe(await readXlsx(fl)) : [];
+        const imp = construireImport(blocs, joueurs);
+        const noms = new Set(imp.pools.flatMap((p) => p.entries.flatMap(joueursDe)).map((n) => n.toLowerCase()));
+        imp.absents = [...new Set(joueurs.map((j) => `${j.prenom} ${j.nom}`))]
+          .filter((n) => ![...noms].some((x) => x.replace(/-/g, " ") === n.toLowerCase().replace(/-/g, " ")));
+        imp.replace = !!fl;
+        if (!fl) {
+          imp.warnings.push("Sans la liste des joueurs : pas de téléphones, prénoms du mixte en initiales (groupe décoché), et remplacement désactivé par sécurité.");
+          imp.pools.forEach((p) => { if (p.entries.some((e) => /\b\p{L}\.(\s|$)/u.test(e))) p.skip = true; });
+        }
+        S.imp = imp;
+      } catch (err) {
+        S.err = `Lecture impossible : ${err.message}`;
+      } finally { busy = false; }
+      break;
+    }
+    case "impSave": {
+      const imp = S.imp;
+      const pools = imp.pools.map((p, i) => ({
+        ...p,
+        skip: !document.querySelector(`[data-imp-pool="${i}"]`).checked,
+        entries: document.querySelector(`[data-imp-entries="${i}"]`).value.split(/\r?\n/).map((x) => x.trim()).filter(Boolean),
+      })).filter((p) => !p.skip);
+      const replace = document.getElementById("impReplace").checked;
+      if (!pools.length) { S.err = "Aucune poule cochée."; break; }
+      if (replace && !window.confirm("Remplacer la composition actuelle par cet import ?")) return;
+      const r = await manage({ action: "import", pools, contacts: imp.contacts, replace });
+      if (r) {
+        const x = r.report;
+        S.impOpen = false; S.imp = null; S.pool = D.pools[0]?.id ?? null;
+        S.msg = `✅ Import : ${x.pools} groupes, ${x.added} noms ajoutés${x.removed ? `, ${x.removed} retirés` : ""}, ${x.phones} numéros.` +
+          (x.kept.length ? `<div class="reason">Conservés car des demandes existent : ${x.kept.map(esc).join(", ")}</div>` : "") +
+          (x.errors.length ? `<div class="reason">${x.errors.map(esc).join("<br>")}</div>` : "");
+        render();
+      }
+      return;
+    }
+    case "delPool": {
+      const p = getPoule(v);
+      if (!window.confirm(`Supprimer ${p.nom} et tous ses noms ?`)) return;
+      return manage({ action: "pool_delete", poolId: v }, `${esc(p.nom)} supprimée.`);
     }
 
     /* Poules */

@@ -76,6 +76,36 @@ export function nowParis() {
   return `${p.year}-${p.month}-${p.day} ${p.hour === "24" ? "00" : p.hour}:${p.minute}`;
 }
 export const estAVenir = (c) => `${c.date} ${c.time}` > nowParis();
+
+/* ---------- Durées ---------- */
+export const DEFAULT_DURATION = 120;
+export const DURATIONS = [60, 90, 120, 150, 180];
+export const toMin = (t) => { const [h, m] = String(t).split(":").map(Number); return h * 60 + m; };
+export const fromMin = (n) => `${String(Math.floor(n / 60)).padStart(2, "0")}:${String(n % 60).padStart(2, "0")}`;
+export const finCreneau = (time, duration = DEFAULT_DURATION) => fromMin(toMin(time) + Number(duration || DEFAULT_DURATION));
+export const fmtDuree = (min) => `${Math.floor(min / 60)}h${min % 60 ? String(min % 60).padStart(2, "0") : ""}`;
+/** Deux créneaux du même jour se chevauchent-ils ? */
+export const chevauche = (a, b) => a.date === b.date &&
+  toMin(a.time) < toMin(b.time) + (b.duration || DEFAULT_DURATION) &&
+  toMin(b.time) < toMin(a.time) + (a.duration || DEFAULT_DURATION);
+
+/** Dates "AAAA-MM-JJ" entre deux bornes, filtrées par jours (0 = dimanche … 6 = samedi) */
+export function joursEntre(from, to, jours) {
+  const out = [];
+  const [y1, m1, d1] = from.split("-").map(Number), [y2, m2, d2] = to.split("-").map(Number);
+  const end = Date.UTC(y2, m2 - 1, d2);
+  for (let t = Date.UTC(y1, m1 - 1, d1), n = 0; t <= end && n < 400; t += 86400000, n++) {
+    const d = new Date(t);
+    if (jours.includes(d.getUTCDay())) out.push(d.toISOString().slice(0, 10));
+  }
+  return out;
+}
+/** Heures de début d'une série : de `debut` jusqu'à `fin` (fin du dernier match), pas = durée */
+export function heuresSerie(debut, fin, duration) {
+  const out = [];
+  for (let m = toMin(debut); m + duration <= toMin(fin); m += duration) out.push(fromMin(m));
+  return out;
+}
 export const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 export const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 

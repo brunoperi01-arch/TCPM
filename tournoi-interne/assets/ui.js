@@ -18,11 +18,11 @@ export function header(label, extra = "") {
   </header>`;
 }
 
-export function matchCard(catLabel, poolNom, a, b, date, time) {
+export function matchCard(catLabel, poolNom, a, b, date, time, end) {
   return `<div class="vs">
     <div class="cat"><span>${esc(catLabel)}</span><span>${esc(poolNom)}</span></div>
     <div class="side">${esc(a)}</div><div class="x">VS</div><div class="side">${esc(b)}</div>
-    <div class="when"><span>${fmtDay(date)}</span><b>${fmtTime(time)}</b></div></div>`;
+    <div class="when"><span>${fmtDay(date)}${end ? `<br><small>jusqu'à ${fmtTime(end)}</small>` : ""}</span><b>${fmtTime(time)}</b></div></div>`;
 }
 
 export async function api(path, options = {}) {

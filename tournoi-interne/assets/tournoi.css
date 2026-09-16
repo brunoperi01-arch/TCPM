@@ -223,3 +223,26 @@ select{width:100%;font-size:18px;padding:15px 12px}
 input[type=file]{width:100%;font:inherit;font-size:14px;color:var(--muted);background:rgba(4,11,31,.7);border:1px dashed var(--line);border-radius:12px;padding:12px}
 input[type=file]::file-selector-button{font:inherit;font-weight:700;border:0;border-radius:8px;padding:8px 12px;margin-right:10px;background:var(--electric);color:var(--night);cursor:pointer}
 .toggle.danger{color:#ff8f9a}
+.days{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.day-chip{width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:var(--dim);color:var(--muted);font-weight:700;cursor:pointer}
+.day-chip.on{background:var(--electric);border-color:var(--electric);color:var(--night)}
+.mini{background:none;border:1px solid var(--line);border-radius:99px;color:var(--glow);font-size:12px;font-weight:600;padding:6px 10px;cursor:pointer}
+.preview{background:rgba(217,240,58,.08);border:1px solid rgba(217,240,58,.3);border-radius:10px;padding:10px 12px;margin-top:12px;font-size:13px;color:#eaf1ff;line-height:1.5}
+.preview b{color:var(--ball)}
+.login .tabs{margin-bottom:4px}
+.toolbar .count{font-size:13px;color:var(--muted)}
+.dayhead{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.dayhead .day{margin-bottom:8px}
+.slotrow .h{display:flex;flex-direction:column;width:64px;flex:none;line-height:1}
+.slotrow .h b{font-family:var(--cond);font-size:24px;color:#fff}
+.slotrow .h small{font-size:11px;color:var(--muted);margin-top:2px}
+.slotrow.picked{border-color:var(--ball);background:rgba(217,240,58,.08)}
+.check{width:30px;height:30px;border-radius:8px;border:2px solid var(--line);background:transparent;color:var(--night);font-weight:800;cursor:pointer;flex:none}
+.check.on{background:var(--ball);border-color:var(--ball)}
+.selbar{position:sticky;bottom:10px;z-index:6;display:flex;align-items:center;flex-wrap:wrap;gap:8px;background:rgba(4,11,31,.92);border:1px solid var(--ball);border-radius:14px;padding:10px 12px;margin-top:14px;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.selbar b{width:100%;color:var(--ball);font-size:14px}
+.selbar .btn{padding:10px 6px;font-size:13px}
+.slot i{display:block;font-style:normal;font-size:12px;color:var(--glow);margin-top:-2px}
+.slot:disabled i{color:#4a5d85}
+.vs .when small{font-weight:500;font-size:13px}
+.grid3.grid2 .field:first-child{grid-column:auto}

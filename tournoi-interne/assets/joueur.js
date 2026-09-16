@@ -1,6 +1,6 @@
 // Page joueur : demande de créneau
 import {
-  CATEGORIES, JAT_PHONE, levelInfo, estAVenir, isActive, pairKey, slotState, normPhone,
+  CATEGORIES, JAT_PHONE, levelInfo, estAVenir, isActive, pairKey, slotState, normPhone, finCreneau,
 } from "./config.js";
 import { esc, btnData, fmtDay, fmtShort, fmtTime, header, matchCard, api, onAction } from "./ui.js";
 
@@ -14,6 +14,7 @@ const getPoule = (id) => DATA.pools.find((p) => p.id === id);
 const poolsOf = (cat, level) => DATA.pools.filter((p) => p.category === cat && (!level || p.level === level));
 const levelsOf = (cat) => [...new Set(poolsOf(cat).map((p) => p.level))];
 const ouverte = (p) => entreesDe(p.id).length >= 2;
+const finDe = (date, time) => finCreneau(time, DATA.creneaux.find((c) => c.date === date && c.time === time)?.duration);
 let loaded = false, loadError = null;
 
 async function load() {
@@ -97,7 +98,7 @@ function vOpp() {
     let badge, small = "", dis = true;
     if (r && r.status === "confirmed") {
       badge = `<span class="badge b-conf">Programmé</span>`;
-      small = `${fmtShort(r.date)} à ${fmtTime(r.time)}, ${esc(r.court)}`;
+      small = `${fmtShort(r.date)}, ${fmtTime(r.time)} – ${fmtTime(finDe(r.date, r.time))}, ${esc(r.court)}`;
     } else if (r) {
       badge = `<span class="badge b-wait">Demande en attente</span>`;
       small = `${fmtShort(r.date)} à ${fmtTime(r.time)}`;
@@ -127,7 +128,7 @@ function vSlot() {
     list.map((c) => {
       const st = slotState(DATA.requests, c, S.player, S.opp);
       const lbl = st.type === "full" ? "Complet" : st.type === "conflict" ? "Déjà engagé" : `${st.left} terrain${st.left > 1 ? "s" : ""}`;
-      return `<button class="slot ${st.type}" ${st.type !== "ok" ? "disabled" : ""} ${btnData("slot", c.i)}><b>${fmtTime(c.time)}</b><span>${lbl}</span></button>`;
+      return `<button class="slot ${st.type}" ${st.type !== "ok" ? "disabled" : ""} ${btnData("slot", c.i)}><b>${fmtTime(c.time)}</b><i>→ ${fmtTime(finCreneau(c.time, c.duration))}</i><span>${lbl}</span></button>`;
     }).join("") + `</div>`
   ).join("");
   return `<p class="q">Choisissez un créneau</p><p class="sub">${esc(S.player)} contre ${esc(S.opp)}</p>` +
@@ -145,7 +146,7 @@ function contactField(side, entry, role) {
 function vRecap() {
   const p = getPoule(S.poule), c = S.slot, mixte = S.cat === "mixte";
   return `<p class="q">Vérifiez votre demande</p><p class="sub">Le terrain sera attribué par le club.</p>` +
-    matchCard(CATEGORIES[S.cat], p.nom, S.player, S.opp, c.date, c.time) +
+    matchCard(CATEGORIES[S.cat], p.nom, S.player, S.opp, c.date, c.time, finCreneau(c.time, c.duration)) +
     `<p class="ask-title">Prévenus sur WhatsApp à la confirmation</p>` +
     contactField(1, S.player, mixte ? "Votre équipe" : "Vous") +
     contactField(2, S.opp, mixte ? "Équipe adverse" : "Votre adversaire") +
@@ -156,14 +157,14 @@ function vRecap() {
 }
 function jatLink(r) {
   const txt = `Bonjour Bruno, question sur ma demande du tournoi interne :\n` +
-    `${r.player} contre ${r.opponent} (${r.pool}), ${fmtDay(r.date).toLowerCase()} à ${fmtTime(r.time)}.\n\n`;
+    `${r.player} contre ${r.opponent} (${r.pool}), ${fmtDay(r.date).toLowerCase()} de ${fmtTime(r.time)} à ${fmtTime(r.end)}.\n\n`;
   return `https://wa.me/${JAT_PHONE}?text=${encodeURIComponent(txt)}`;
 }
 function vDone() {
   const r = S.last;
   return `<div class="done"><div class="check">✓</div>
     <h2>Demande envoyée au club</h2><p>Votre créneau doit maintenant être confirmé. Les deux joueurs seront prévenus sur WhatsApp.</p></div>` +
-    matchCard(r.catLabel, r.pool, r.player, r.opponent, r.date, r.time) +
+    matchCard(r.catLabel, r.pool, r.player, r.opponent, r.date, r.time, r.end) +
     `<button class="cta dark" ${btnData("again")}>Faire une autre demande</button>
      <a class="cta dark jat" href="${jatLink(r)}" target="_blank" rel="noopener">Une question ? Écrire au juge-arbitre</a>`;
 }
@@ -187,7 +188,7 @@ async function submit() {
       poolId: p.id, player: S.player, opponent: S.opp, date: c.date, time: c.time,
       phone1, phone2, website: document.getElementById("website")?.value || "",
     }});
-    S.last = { catLabel: CATEGORIES[S.cat], pool: p.nom, player: S.player, opponent: S.opp, date: c.date, time: c.time };
+    S.last = { catLabel: CATEGORIES[S.cat], pool: p.nom, player: S.player, opponent: S.opp, date: c.date, time: c.time, end: finCreneau(c.time, c.duration) };
     S.hist = []; S.step = "done";
     load();
   } catch (e) {

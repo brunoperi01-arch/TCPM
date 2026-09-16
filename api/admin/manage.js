@@ -4,7 +4,7 @@ import { requireAdmin } from "../_lib/auth.js";
 import { loadData, fromClient } from "../_lib/data.js";
 import {
   formatEntree, erreurEntree, joueursDe, normPhone, clean, CATEGORIES, poolId, poolNom,
-  DATE_RE, TIME_RE, TERRAINS,
+  DATE_RE, TIME_RE, TERRAINS, DURATIONS, toMin, chevauche, joursEntre, heuresSerie, nowParis,
 } from "../../tournoi-interne/assets/config.js";
 
 const MAX_LINES = 60;
@@ -25,6 +25,31 @@ async function upsertContact(db, name, tel) {
   await db.query(
     `INSERT INTO player_contacts (name, phone) VALUES ($1, $2)
      ON CONFLICT (name) DO UPDATE SET phone = EXCLUDED.phone, updated_at = now()`, [name, tel]);
+}
+
+function checkSlot(b) {
+  const capacity = Number(b.capacity), duration = Number(b.duration ?? 120);
+  if (!DATE_RE.test(b.date) || !TIME_RE.test(b.time)) throw new HttpError(400, "Date ou heure invalide.");
+  if (!(capacity >= 1 && capacity <= TERRAINS.length)) throw new HttpError(400, `Terrains : entre 1 et ${TERRAINS.length}.`);
+  if (!DURATIONS.includes(duration)) throw new HttpError(400, "Durée invalide.");
+  if (toMin(b.time) + duration > 24 * 60) throw new HttpError(400, "Le créneau dépasse minuit.");
+  return { date: b.date, time: b.time, capacity, duration };
+}
+
+async function slotsOn(db, dates) {
+  if (!dates.length) return [];
+  const { rows } = await db.query(
+    `SELECT to_char(slot_date, 'YYYY-MM-DD') AS date, to_char(slot_time, 'HH24:MI') AS time,
+            duration_min AS duration
+     FROM tournament_slots WHERE slot_date = ANY($1::date[])`, [dates]);
+  return rows;
+}
+
+async function insertSlot(db, s) {
+  const { rowCount } = await db.query(
+    `INSERT INTO tournament_slots (slot_date, slot_time, capacity, duration_min) VALUES ($1, $2, $3, $4)
+     ON CONFLICT (slot_date, slot_time) DO NOTHING`, [s.date, s.time, s.capacity, s.duration]);
+  if (!rowCount) throw new HttpError(409, "Ce créneau existe déjà.");
 }
 
 async function hasRequests(db, sqlWhere, params) {
@@ -156,14 +181,62 @@ const handlers = {
   },
 
   async slot_add(db, b) {
-    const cap = Number(b.capacity);
-    if (!DATE_RE.test(b.date) || !TIME_RE.test(b.time)) throw new HttpError(400, "Date ou heure invalide.");
-    if (!(cap >= 1 && cap <= TERRAINS.length)) throw new HttpError(400, `Capacité entre 1 et ${TERRAINS.length}.`);
-    const { rowCount } = await db.query(
-      `INSERT INTO tournament_slots (slot_date, slot_time, capacity) VALUES ($1, $2, $3)
-       ON CONFLICT (slot_date, slot_time) DO NOTHING`, [b.date, b.time, cap]);
-    if (!rowCount) throw new HttpError(409, "Ce créneau existe déjà.");
+    const slot = checkSlot(b);
+    const existing = await slotsOn(db, [slot.date]);
+    const conflit = existing.find((x) => chevauche(x, slot));
+    if (conflit) throw new HttpError(409, `Chevauche le créneau de ${conflit.time.replace(":", "h")} ce jour-là.`);
+    await insertSlot(db, slot);
     return {};
+  },
+
+  // Série : période + jours de la semaine + plage horaire, découpée selon la durée
+  async slot_batch(db, b) {
+    if (!DATE_RE.test(b.from) || !DATE_RE.test(b.to) || b.from > b.to) throw new HttpError(400, "Période invalide.");
+    if (!TIME_RE.test(b.start) || !TIME_RE.test(b.end)) throw new HttpError(400, "Heures invalides.");
+    const jours = (Array.isArray(b.days) ? b.days : []).map(Number).filter((d) => d >= 0 && d <= 6);
+    if (!jours.length) throw new HttpError(400, "Choisissez au moins un jour.");
+    const duration = Number(b.duration);
+    const dates = joursEntre(b.from, b.to, jours);
+    const heures = heuresSerie(b.start, b.end, duration);
+    if (!heures.length) throw new HttpError(400, "La plage horaire est plus courte que la durée d'un match.");
+    if (dates.length * heures.length > 300) throw new HttpError(400, "Trop de créneaux d'un coup (300 maximum).");
+
+    const existing = await slotsOn(db, dates);
+    const now = nowParis();
+    const report = { created: 0, skipped: 0, past: 0 };
+    for (const date of dates) {
+      for (const time of heures) {
+        const slot = checkSlot({ date, time, duration, capacity: b.capacity });
+        if (`${date} ${time}` <= now) { report.past++; continue; }
+        if (existing.some((x) => chevauche(x, slot))) { report.skipped++; continue; }
+        await insertSlot(db, slot);
+        existing.push(slot);
+        report.created++;
+      }
+    }
+    return { report };
+  },
+
+  // Actions groupées : supprimer / masquer / afficher
+  async slot_bulk(db, b) {
+    const ids = (Array.isArray(b.ids) ? b.ids : []).map(String).filter((x) => /^\d+$/.test(x)).slice(0, 500);
+    if (!ids.length) throw new HttpError(400, "Aucun créneau sélectionné.");
+    const report = { done: 0, kept: 0 };
+    if (b.op === "hide" || b.op === "show") {
+      const { rowCount } = await db.query(
+        `UPDATE tournament_slots SET active = $2 WHERE id = ANY($1::bigint[])`, [ids, b.op === "show"]);
+      report.done = rowCount;
+    } else if (b.op === "delete") {
+      const { rowCount } = await db.query(
+        `DELETE FROM tournament_slots s WHERE s.id = ANY($1::bigint[])
+         AND NOT EXISTS (SELECT 1 FROM match_requests r
+                         WHERE r.requested_date = s.slot_date AND r.requested_time = s.slot_time)`, [ids]);
+      report.done = rowCount;
+      report.kept = ids.length - rowCount;
+    } else {
+      throw new HttpError(400, "Action inconnue.");
+    }
+    return { report };
   },
 
   async slot_update(db, b) {

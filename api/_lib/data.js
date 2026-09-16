@@ -11,7 +11,7 @@ export async function loadData(q) {
     q(`SELECT id, category, level, number, nom FROM pools`),
     q(`SELECT pool_id, name FROM pool_entries ORDER BY pool_id, id`),
     q(`SELECT id::text AS id, to_char(slot_date, 'YYYY-MM-DD') AS date,
-              to_char(slot_time, 'HH24:MI') AS time, capacity, active
+              to_char(slot_time, 'HH24:MI') AS time, capacity, duration_min AS duration, active
        FROM tournament_slots ORDER BY slot_date, slot_time`),
     q(`SELECT name, phone FROM player_contacts ORDER BY name`),
   ]);

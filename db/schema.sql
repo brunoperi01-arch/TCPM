@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS tournament_slots (
   slot_date date NOT NULL,
   slot_time time NOT NULL,
   capacity smallint NOT NULL CHECK (capacity BETWEEN 1 AND 6),
+  duration_min smallint NOT NULL DEFAULT 120 CHECK (duration_min BETWEEN 30 AND 300),
   active boolean NOT NULL DEFAULT true,
   created_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE (slot_date, slot_time)

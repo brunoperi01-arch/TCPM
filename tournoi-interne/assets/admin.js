@@ -3,6 +3,7 @@
 // ce qui garantit que le navigateur renvoie l'identifiant saisi).
 import {
   CATEGORIES, TERRAINS, MOTIFS, FORM_URL, SIGNATURE, prenom, fmtPhone, joueursDe, estAVenir, levelInfo,
+  DURATIONS, DEFAULT_DURATION, finCreneau, fmtDuree, joursEntre, heuresSerie,
 } from "./config.js";
 import { readXlsx, parseTableau, parseListe, construireImport } from "./moja.js";
 import { esc, btnData, fmtDay, fmtShort, fmtTime, header, api, onAction } from "./ui.js";
@@ -15,7 +16,12 @@ const getPoule = (id) => D.pools.find((p) => p.id === id);
 let loaded = false, loadError = null, busy = false;
 let S = { section: "demandes", tab: "pending", val: null, court: null, refuse: null, refReason: null, cancel: null,
   msg: null, msgId: null, err: null, pool: null, poolText: "", imp: null, impOpen: false, rename: null, report: null,
-  slotForm: { date: "", time: "18:00", capacity: 2 }, showPast: false, contactFilter: "missing" };
+  slotForm: { date: "", time: "18:00", capacity: 2, duration: DEFAULT_DURATION }, showPast: false, contactFilter: "missing",
+  slotMode: "serie", selMode: false, sel: new Set(),
+  batch: { from: "", to: "", days: [1, 2, 3, 4, 5], start: "18:00", end: "22:00", duration: DEFAULT_DURATION, capacity: 2 } };
+const JOURS = [[1, "L"], [2, "M"], [3, "M"], [4, "J"], [5, "V"], [6, "S"], [0, "D"]];
+const slotOf = (date, time) => D.slots.find((x) => x.date === date && x.time === time);
+const plage = (date, time) => `${fmtTime(time)} – ${fmtTime(finCreneau(time, slotOf(date, time)?.duration))}`;
 
 async function load() {
   try {
@@ -71,7 +77,8 @@ const catLabel = (c) => CATEGORIES[c] ?? c;
 function waMessage(r, side) {
   const moi = side === 1 ? r.player : r.opponent;
   const lui = side === 1 ? r.opponent : r.player;
-  const quand = `${fmtDay(r.date).toLowerCase()} à ${fmtTime(r.time)}`;
+  const fin = fmtTime(finCreneau(r.time, slotOf(r.date, r.time)?.duration));
+  const quand = `${fmtDay(r.date).toLowerCase()} de ${fmtTime(r.time)} à ${fin}`;
   let txt;
   if (r.status === "confirmed")
     txt = `✅ Tournoi interne TCPM\nBonjour ${prenom(moi)}, votre match contre ${lui} est confirmé ${quand}, ${r.court}.\nBon match ! 🎾`;
@@ -100,7 +107,7 @@ function card(r) {
       ${r.status === "refused" ? `<span class="badge b-full">Refusé</span>` : ""}
       ${r.status === "cancelled" ? `<span class="badge b-grey">Annulé</span>` : ""}</div>
     <div class="pool">${esc(r.pool)}</div>
-    <div class="when">${fmtDay(r.date)} à ${fmtTime(r.time)}</div>
+    <div class="when">${fmtDay(r.date)}, ${plage(r.date, r.time)}</div>
     <div class="contact">${esc(prenom(r.player))} : ${fmtPhone(r.phone1)}, ${esc(prenom(r.opponent))} : ${fmtPhone(r.phone2)}</div>
     ${r.status === "refused" && r.reason ? `<div class="reason">Motif : ${esc(r.reason)}</div>` : ""}`;
 
@@ -257,8 +264,24 @@ function vPoules() {
 }
 
 /* ---------- Créneaux ---------- */
+const dureeOptions = (sel) => DURATIONS.map((d) => `<option value="${d}" ${d === sel ? "selected" : ""}>${fmtDuree(d)}</option>`).join("");
+const terrainOptions = (sel) => TERRAINS.map((_, i) => `<option ${sel === i + 1 ? "selected" : ""}>${i + 1}</option>`).join("");
+
+function batchPreview() {
+  const b = S.batch;
+  if (!b.from || !b.to) return `<p class="hint">Choisissez la période.</p>`;
+  if (b.from > b.to) return `<p class="reason">La date de fin est avant la date de début.</p>`;
+  const dates = joursEntre(b.from, b.to, b.days);
+  const heures = heuresSerie(b.start, b.end, b.duration);
+  if (!b.days.length) return `<p class="reason">Choisissez au moins un jour.</p>`;
+  if (!heures.length) return `<p class="reason">La plage ${fmtTime(b.start)} – ${fmtTime(b.end)} est plus courte qu'un match de ${fmtDuree(b.duration)}.</p>`;
+  const n = dates.length * heures.length;
+  return `<p class="preview"><b>${n} créneau${n > 1 ? "x" : ""}</b> sur ${dates.length} jour${dates.length > 1 ? "s" : ""} :
+    ${heures.map((h) => `${fmtTime(h)} – ${fmtTime(finCreneau(h, b.duration))}`).join(", ")}, ${b.capacity} terrain${b.capacity > 1 ? "s" : ""}.</p>`;
+}
+
 function vCreneaux() {
-  const f = S.slotForm;
+  const f = S.slotForm, b = S.batch;
   const withStats = D.slots.map((s) => {
     const on = requests.filter((r) => r.date === s.date && r.time === s.time);
     return { ...s, conf: on.filter((r) => r.status === "confirmed").length,
@@ -268,34 +291,76 @@ function vCreneaux() {
   const byDay = (arr) => {
     const g = {};
     arr.forEach((s) => (g[s.date] ||= []).push(s));
-    return Object.entries(g).map(([d, list]) => `<p class="day">${fmtDay(d)}</p>` + list.map(slotRow).join("")).join("");
+    return Object.entries(g).map(([d, list]) => {
+      const all = list.every((s) => S.sel.has(s.id));
+      return `<div class="dayhead"><p class="day">${fmtDay(d)}</p>
+        ${S.selMode ? `<button class="mini" ${btnData("selDay", d)}>${all ? "Aucun" : "Tous"}</button>` : ""}</div>` +
+        list.map(slotRow).join("");
+    }).join("");
   };
-  return `<div class="login">
-      <p class="ask-title" style="margin-top:0">Ouvrir un créneau</p>
+
+  const formUn = `
       <div class="grid3">
         <div class="field"><label for="sDate">Date</label><input id="sDate" type="date" value="${esc(f.date)}"></div>
-        <div class="field"><label for="sTime">Heure</label><input id="sTime" type="time" step="900" value="${esc(f.time)}"></div>
-        <div class="field"><label for="sCap">Terrains</label><select id="sCap">${TERRAINS.map((_, i) =>
-          `<option ${f.capacity === i + 1 ? "selected" : ""}>${i + 1}</option>`).join("")}</select></div>
+        <div class="field"><label for="sTime">Début</label><input id="sTime" type="time" step="900" value="${esc(f.time)}"></div>
+        <div class="field"><label for="sDur">Durée</label><select id="sDur">${dureeOptions(f.duration)}</select></div>
+        <div class="field"><label for="sCap">Terrains</label><select id="sCap">${terrainOptions(f.capacity)}</select></div>
       </div>
+      <button class="cta" ${busy ? "disabled" : ""} ${btnData("addSlot")}>OUVRIR CE CRÉNEAU</button>`;
+
+  const formSerie = `
+      <div class="grid3 grid2">
+        <div class="field"><label for="bFrom">Du</label><input id="bFrom" data-batch type="date" value="${esc(b.from)}"></div>
+        <div class="field"><label for="bTo">Au</label><input id="bTo" data-batch type="date" value="${esc(b.to)}"></div>
+      </div>
+      <div class="field"><label>Jours</label><div class="days">${JOURS.map(([d, l]) =>
+        `<button class="day-chip ${b.days.includes(d) ? "on" : ""}" ${btnData("day", d)}>${l}</button>`).join("")}
+        <button class="mini" ${btnData("daysPreset", "semaine")}>Lun-Ven</button>
+        <button class="mini" ${btnData("daysPreset", "tous")}>Tous</button></div></div>
+      <div class="grid3">
+        <div class="field"><label for="bStart">Premier match</label><input id="bStart" data-batch type="time" step="900" value="${esc(b.start)}"></div>
+        <div class="field"><label for="bEnd">Fin du dernier</label><input id="bEnd" data-batch type="time" step="900" value="${esc(b.end)}"></div>
+        <div class="field"><label for="bDur">Durée</label><select id="bDur" data-batch>${dureeOptions(b.duration)}</select></div>
+        <div class="field"><label for="bCap">Terrains</label><select id="bCap" data-batch>${terrainOptions(b.capacity)}</select></div>
+      </div>
+      <div id="batchPreview">${batchPreview()}</div>
+      <p class="hint">Les créneaux qui chevauchent un créneau existant sont ignorés.</p>
+      <button class="cta" ${busy ? "disabled" : ""} ${btnData("addBatch")}>OUVRIR LA SÉRIE</button>`;
+
+  const nSel = S.sel.size;
+  return `<div class="login">
+      <div class="tabs">
+        <button class="${S.slotMode === "serie" ? "on" : ""}" ${btnData("slotMode", "serie")}>En série</button>
+        <button class="${S.slotMode === "un" ? "on" : ""}" ${btnData("slotMode", "un")}>Un créneau</button>
+      </div>
+      ${S.slotMode === "serie" ? formSerie : formUn}
       <p class="hint">Terrains = nombre maximum de matchs du tournoi en même temps (tenir compte des cours).</p>
-      <button class="cta" ${busy ? "disabled" : ""} ${btnData("addSlot")}>OUVRIR CE CRÉNEAU</button>
     </div>
+    <div class="toolbar"><span class="count">${future.length} créneau${future.length > 1 ? "x" : ""} à venir</span>
+      ${D.slots.length ? `<button ${btnData("selMode")}>${S.selMode ? "Terminer" : "☑ Sélectionner"}</button>` : ""}</div>
     ${future.length ? byDay(future) : `<div class="empty">Aucun créneau à venir.</div>`}
     ${past.length ? `<button class="toggle" ${btnData("past")}>${S.showPast ? "Masquer" : "Afficher"} les ${past.length} créneaux passés</button>
-      ${S.showPast ? byDay(past) : ""}` : ""}`;
+      ${S.showPast ? byDay(past) : ""}` : ""}
+    ${S.selMode ? `<div class="selbar"><b>${nSel} sélectionné${nSel > 1 ? "s" : ""}</b>
+      <button class="btn btn-sec" ${nSel ? "" : "disabled"} ${btnData("bulk", "hide")}>Masquer</button>
+      <button class="btn btn-sec" ${nSel ? "" : "disabled"} ${btnData("bulk", "show")}>Afficher</button>
+      <button class="btn btn-no" ${nSel ? "" : "disabled"} ${btnData("bulk", "delete")}>Supprimer</button></div>` : ""}`;
 }
 function slotRow(s) {
-  return `<div class="slotrow ${s.active ? "" : "off"} ${s.future ? "" : "past"}">
-    <b class="h">${fmtTime(s.time)}</b>
+  const fin = fmtTime(finCreneau(s.time, s.duration));
+  const check = S.selMode
+    ? `<button class="check ${S.sel.has(s.id) ? "on" : ""}" ${btnData("sel", s.id)} aria-label="Sélectionner">${S.sel.has(s.id) ? "✓" : ""}</button>` : "";
+  return `<div class="slotrow ${s.active ? "" : "off"} ${s.future ? "" : "past"} ${S.sel.has(s.id) ? "picked" : ""}">
+    ${check}
+    <div class="h"><b>${fmtTime(s.time)}</b><small>→ ${fin}</small></div>
     <div class="grow"><small>${s.conf} / ${s.capacity} confirmés${s.pend ? ` · ${s.pend} en attente` : ""}${s.active ? "" : " · <em>masqué</em>"}</small></div>
-    ${s.future ? `<div class="stepper">
+    ${!S.selMode && s.future ? `<div class="stepper">
         <button ${btnData("capMinus", s.id)} ${s.capacity <= Math.max(1, s.conf) ? "disabled" : ""} aria-label="Moins">−</button>
         <span>${s.capacity}</span>
         <button ${btnData("capPlus", s.id)} ${s.capacity >= TERRAINS.length ? "disabled" : ""} aria-label="Plus">+</button>
       </div>
       <button class="icon" ${btnData("toggleSlot", s.id)} aria-label="${s.active ? "Masquer" : "Afficher"}">${s.active ? "👁" : "🚫"}</button>` : ""}
-    ${s.total ? "" : `<button class="icon" ${btnData("delSlot", s.id)} aria-label="Supprimer">🗑</button>`}
+    ${!S.selMode && !s.total ? `<button class="icon" ${btnData("delSlot", s.id)} aria-label="Supprimer">🗑</button>` : ""}
   </div>`;
 }
 
@@ -332,6 +397,7 @@ function vAdmin() {
 function render() {
   const ta = document.getElementById("poolText");
   if (ta) S.poolText = ta.value;
+  readBatch();
   if (S.imp) {
     S.imp.pools.forEach((p, i) => {
       const cb = document.querySelector(`[data-imp-pool="${i}"]`), tx = document.querySelector(`[data-imp-entries="${i}"]`);
@@ -348,7 +414,7 @@ function render() {
   app.innerHTML = header("Administration") + `<main>${body}</main>` + `<div class="ball" aria-hidden="true"></div>`;
 }
 
-const keep = ["court", "reason", "wa", "pool", "ren", "renX", "cf", "past"];
+const keep = ["court", "reason", "wa", "pool", "ren", "renX", "cf", "past", "day", "daysPreset", "sel", "selDay", "slotMode"];
 onAction(async (act, v, e) => {
   if (!keep.includes(act)) { S.msg = null; S.msgId = null; S.err = null; }
   switch (act) {
@@ -454,14 +520,57 @@ onAction(async (act, v, e) => {
       return manage({ action: "entry_delete", poolId: S.pool, name: v }, `« ${esc(v)} » retiré.`);
 
     /* Créneaux */
+    case "slotMode": S.slotMode = v; break;
     case "addSlot": {
       const f = { date: document.getElementById("sDate").value, time: document.getElementById("sTime").value,
-        capacity: Number(document.getElementById("sCap").value) };
+        duration: Number(document.getElementById("sDur").value), capacity: Number(document.getElementById("sCap").value) };
       S.slotForm = f;
       if (!f.date || !f.time) { S.err = "Choisissez une date et une heure."; break; }
       if (!estAVenir(f)) { S.err = "Ce créneau est déjà passé."; break; }
-      const r = await manage({ action: "slot_add", ...f }, `Créneau ajouté : ${fmtShort(f.date)} à ${fmtTime(f.time)}.`);
-      if (r) { S.slotForm = { ...f, time: "" }; render(); } // même date, prêt pour le suivant
+      const r = await manage({ action: "slot_add", ...f },
+        `Créneau ouvert : ${fmtShort(f.date)}, ${fmtTime(f.time)} – ${fmtTime(finCreneau(f.time, f.duration))}.`);
+      if (r) { S.slotForm = { ...f, time: "" }; render(); }
+      return;
+    }
+    case "day": {
+      const d = Number(v), days = S.batch.days;
+      S.batch.days = days.includes(d) ? days.filter((x) => x !== d) : [...days, d];
+      break;
+    }
+    case "daysPreset": S.batch.days = v === "tous" ? [0, 1, 2, 3, 4, 5, 6] : [1, 2, 3, 4, 5]; break;
+    case "addBatch": {
+      const b = S.batch;
+      if (!b.from || !b.to) { S.err = "Choisissez la période."; break; }
+      const n = joursEntre(b.from, b.to, b.days).length * heuresSerie(b.start, b.end, b.duration).length;
+      if (!n) { S.err = "Aucun créneau à créer avec ces réglages."; break; }
+      if (!window.confirm(`Ouvrir ${n} créneau${n > 1 ? "x" : ""} ?`)) return;
+      const r = await manage({ action: "slot_batch", ...b }, (x) => {
+        const rep = x.report;
+        return `✅ ${rep.created} créneau${rep.created > 1 ? "x" : ""} ouvert${rep.created > 1 ? "s" : ""}` +
+          (rep.skipped ? `, ${rep.skipped} ignoré${rep.skipped > 1 ? "s" : ""} (déjà pris)` : "") +
+          (rep.past ? `, ${rep.past} déjà passé${rep.past > 1 ? "s" : ""}` : "") + ".";
+      });
+      return r;
+    }
+    case "selMode": S.selMode = !S.selMode; S.sel = new Set(); break;
+    case "sel": S.sel.has(v) ? S.sel.delete(v) : S.sel.add(v); break;
+    case "selDay": {
+      const ids = D.slots.filter((x) => x.date === v).map((x) => x.id);
+      const all = ids.every((id) => S.sel.has(id));
+      ids.forEach((id) => (all ? S.sel.delete(id) : S.sel.add(id)));
+      break;
+    }
+    case "bulk": {
+      const ids = [...S.sel];
+      const label = { hide: "Masquer", show: "Afficher", delete: "Supprimer" }[v];
+      if (!window.confirm(`${label} ${ids.length} créneau${ids.length > 1 ? "x" : ""} ?`)) return;
+      const r = await manage({ action: "slot_bulk", op: v, ids }, (x) => {
+        const rep = x.report;
+        if (v === "delete") return `🗑 ${rep.done} supprimé${rep.done > 1 ? "s" : ""}` +
+          (rep.kept ? `. ${rep.kept} conservé${rep.kept > 1 ? "s" : ""} car des demandes existent : masquez-les plutôt.` : ".");
+        return `${rep.done} créneau${rep.done > 1 ? "x" : ""} ${v === "hide" ? "masqué" : "affiché"}${rep.done > 1 ? "s" : ""}.`;
+      });
+      if (r) { S.sel = new Set(); render(); }
       return;
     }
     case "capMinus": case "capPlus": {
@@ -488,6 +597,24 @@ onAction(async (act, v, e) => {
   }
   render();
 });
+
+function readBatch() {
+  const g = (id) => document.getElementById(id);
+  if (!g("bFrom")) return;
+  Object.assign(S.batch, {
+    from: g("bFrom").value, to: g("bTo").value, start: g("bStart").value, end: g("bEnd").value,
+    duration: Number(g("bDur").value), capacity: Number(g("bCap").value),
+  });
+  if (S.batch.from && (!S.batch.to || S.batch.to < S.batch.from)) { S.batch.to = S.batch.from; g("bTo").value = S.batch.from; }
+}
+const onBatch = (e) => {
+  if (!e.target.matches("[data-batch]")) return;
+  readBatch();
+  const box = document.getElementById("batchPreview");
+  if (box) box.innerHTML = batchPreview();
+};
+document.addEventListener("input", onBatch);
+document.addEventListener("change", onBatch);
 
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Enter") return;

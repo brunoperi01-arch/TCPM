@@ -20,6 +20,13 @@ CREATE TABLE IF NOT EXISTS match_requests (
   notified2_at    timestamptz,
   created_at      timestamptz NOT NULL DEFAULT now(),
   decided_at      timestamptz,
+  score           jsonb,
+  result_type     text CHECK (result_type IN ('normal', 'wo', 'retired')),
+  winner_side     smallint CHECK (winner_side IN (1, 2)),
+  score_at        timestamptz,
+  score_by        text,
+  validated_at    timestamptz,
+  reported_at     timestamptz,
   CHECK (player <> opponent),
   CHECK (status <> 'confirmed' OR court IS NOT NULL)
 );

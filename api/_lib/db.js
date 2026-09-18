@@ -37,9 +37,12 @@ export async function withTx(fn) {
 export const PUBLIC_COLS = `id, category, pool, player, opponent,
   to_char(requested_date, 'YYYY-MM-DD') AS date,
   to_char(requested_time, 'HH24:MI') AS time,
-  status, court, refusal_reason AS reason`;
+  status, court, refusal_reason AS reason,
+  score, result_type, winner_side,
+  score_at IS NOT NULL AS scored, validated_at IS NOT NULL AS validated,
+  reported_at IS NOT NULL AS reported`;
 
-export const ADMIN_COLS = `${PUBLIC_COLS}, phone1, phone2,
+export const ADMIN_COLS = `${PUBLIC_COLS}, phone1, phone2, score_by,
   notified1_at IS NOT NULL AS notified1,
   notified2_at IS NOT NULL AS notified2,
   created_at, decided_at`;

@@ -169,8 +169,8 @@ main{flex:1;padding:8px 16px 28px}
 .foot{text-align:center;font-size:12px;color:var(--muted);padding:0 16px 24px;position:relative;z-index:1}
 
 /* Admin : navigation et gestion */
-.nav{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;background:var(--dim);border:1px solid var(--line);border-radius:14px;padding:4px;margin-bottom:14px;position:sticky;top:8px;z-index:5;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
-.nav button{border:0;background:none;color:var(--muted);font-family:var(--cond);font-size:16px;font-weight:700;padding:10px 2px;border-radius:10px;cursor:pointer}
+.nav{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;background:var(--dim);border:1px solid var(--line);border-radius:14px;padding:4px;margin-bottom:14px;position:sticky;top:8px;z-index:5;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.nav button{border:0;background:none;color:var(--muted);font-family:var(--cond);font-size:15px;font-weight:700;padding:10px 2px;border-radius:10px;cursor:pointer}
 .nav button.on{background:var(--ball);color:var(--night)}
 .nav i{font-style:normal;background:var(--orange);color:var(--night);border-radius:99px;padding:0 6px;font-size:12px;margin-left:2px}
 .chips.pools{margin:0 0 16px}
@@ -249,3 +249,13 @@ input[type=file]::file-selector-button{font:inherit;font-weight:700;border:0;bor
 .cta.wa{display:block;text-align:center;text-decoration:none;background:#25d366;color:#04210f;font-size:18px;padding:15px;box-shadow:0 0 22px rgba(37,211,102,.3)}
 .hint.tip{margin:0 0 10px}
 .sep{height:1px;background:var(--line);margin:18px 0 6px}
+.b-score{background:rgba(217,240,58,.18);color:var(--ball)}
+.setrow{display:flex;align-items:center;gap:10px;margin-top:10px}
+.setrow span{width:80px;flex:none;font-weight:600;color:#fff;font-size:14px}
+.setrow em{font-style:normal;color:var(--muted);font-size:18px}
+.setin{flex:1;min-width:0;font:inherit;font-size:22px;text-align:center;padding:12px 4px;border:1px solid var(--line);border-radius:12px;background:rgba(4,11,31,.7);color:#fff}
+.setin:focus{outline:none;border-color:var(--electric)}
+.setin::-webkit-outer-spin-button,.setin::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.setin{-moz-appearance:textfield}
+.chip.mode.sel{border-color:var(--ball);background:rgba(217,240,58,.15);color:var(--ball)}
+.nav i{font-size:11px;padding:0 5px}

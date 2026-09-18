@@ -131,3 +131,57 @@ export function slotState(requests, c, a, b) {
   if ([...joueursDe(a), ...joueursDe(b)].some((n) => busy.has(n))) return { type: "conflict", left };
   return { type: "ok", left };
 }
+
+/* ---------- Scores (2 sets gagnants, super tie-break au 3e) ---------- */
+export const RESULT_TYPES = { normal: "Score normal", wo: "WO", retired: "Abandon" };
+const setNormal = ([a, b]) => {
+  const max = Math.max(a, b), min = Math.min(a, b);
+  return a !== b && ((max === 6 && min <= 4) || (max === 7 && (min === 5 || min === 6)));
+};
+const setSuper = ([a, b]) => {
+  const max = Math.max(a, b), min = Math.min(a, b);
+  return max >= 10 && max <= 30 && max - min >= 2;
+};
+const gagnant = ([a, b]) => (a > b ? 1 : 2);
+
+/**
+ * Vérifie un score et calcule le vainqueur.
+ * sets   : [[6,4],[3,6],[10,8]] — côté 1 = player, côté 2 = opponent
+ * type   : "normal" | "wo" | "retired"
+ * winner : 1 ou 2, obligatoire pour WO et abandon
+ * → { winner } ou { error }
+ */
+export function analyseScore(sets, type = "normal", winner = null) {
+  const jeux = (Array.isArray(sets) ? sets : [])
+    .map((s) => [Number(s?.[0]), Number(s?.[1])])
+    .filter((s) => Number.isInteger(s[0]) && Number.isInteger(s[1]) && s[0] >= 0 && s[1] >= 0);
+
+  if (type === "wo") {
+    if (winner !== 1 && winner !== 2) return { error: "Indiquez le vainqueur du WO." };
+    return { winner, sets: [] };
+  }
+  if (type === "retired") {
+    if (winner !== 1 && winner !== 2) return { error: "Indiquez qui a gagné après l'abandon." };
+    if (jeux.some(([a, b]) => a > 7 || b > 7)) return { error: "Jeux impossibles (0 à 7)." };
+    return { winner, sets: jeux };
+  }
+  if (jeux.length < 2) return { error: "Saisissez au moins deux sets." };
+  if (jeux.length > 3) return { error: "Trois sets maximum." };
+  if (!setNormal(jeux[0]) || !setNormal(jeux[1]))
+    return { error: "Set invalide : 6/0 à 6/4, 7/5 ou 7/6." };
+  const g1 = gagnant(jeux[0]), g2 = gagnant(jeux[1]);
+  if (g1 === g2) {
+    if (jeux.length === 3) return { error: "Match déjà gagné en deux sets : supprimez le 3e." };
+    return { winner: g1, sets: jeux };
+  }
+  if (jeux.length !== 3) return { error: "Un set partout : saisissez le super tie-break." };
+  if (!setSuper(jeux[2])) return { error: "Super tie-break : 10 points minimum, 2 d'écart." };
+  return { winner: gagnant(jeux[2]), sets: jeux };
+}
+
+export const fmtScore = (sets, type) => {
+  const base = (sets || []).map(([a, b]) => `${a}/${b}`).join(" ");
+  if (type === "wo") return "WO";
+  if (type === "retired") return base ? `${base} ab.` : "Abandon";
+  return base;
+};

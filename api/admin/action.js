@@ -1,7 +1,7 @@
 // POST /api/admin/action — valider, refuser, annuler, marquer « prévenu »
 import { withTx, sql, ADMIN_COLS, sendError, HttpError, body } from "../_lib/db.js";
 import { requireAdmin } from "../_lib/auth.js";
-import { TERRAINS, MOTIFS } from "../../tournoi-interne/assets/config.js";
+import { TERRAINS, MOTIFS, analyseScore } from "../../tournoi-interne/assets/config.js";
 
 const UUID = /^[0-9a-f-]{36}$/i;
 
@@ -52,13 +52,37 @@ export default async function handler(req, res) {
       const rows = await sql.query(
         `UPDATE match_requests
          SET status = 'cancelled', decided_at = now(),
-             notified1_at = NULL, notified2_at = NULL
+             notified1_at = NULL, notified2_at = NULL,
+             score = NULL, result_type = NULL, winner_side = NULL,
+             score_at = NULL, score_by = NULL, validated_at = NULL
          WHERE id = $1 AND status = 'confirmed' RETURNING id`, [id]);
       if (!rows.length) throw new HttpError(409, "Ce match n'est plus confirmé.");
     } else if (action === "notified") {
       const col = side === 1 ? "notified1_at" : side === 2 ? "notified2_at" : null;
       if (!col) throw new HttpError(400, "Joueur inconnu.");
       await sql.query(`UPDATE match_requests SET ${col} = now() WHERE id = $1`, [id]);
+    } else if (action === "score") {
+      // Correction du score par le juge-arbitre (validé dans la foulée)
+      const { sets, type, winner } = body(req);
+      const t = ["normal", "wo", "retired"].includes(type) ? type : "normal";
+      const check = analyseScore(sets, t, winner === 1 || winner === 2 ? winner : null);
+      if (check.error) throw new HttpError(400, check.error);
+      const rows = await sql.query(
+        `UPDATE match_requests
+         SET score = $2::jsonb, result_type = $3, winner_side = $4,
+             score_at = COALESCE(score_at, now()), score_by = 'Juge-arbitre', validated_at = now()
+         WHERE id = $1 AND status = 'confirmed' RETURNING id`,
+        [id, JSON.stringify(check.sets), t, check.winner]);
+      if (!rows.length) throw new HttpError(409, "Ce match n'est pas confirmé.");
+    } else if (action === "validate_score") {
+      const rows = await sql.query(
+        `UPDATE match_requests SET validated_at = now()
+         WHERE id = $1 AND score_at IS NOT NULL AND validated_at IS NULL RETURNING id`, [id]);
+      if (!rows.length) throw new HttpError(409, "Aucun score à valider pour ce match.");
+    } else if (action === "moja") {
+      await sql.query(
+        `UPDATE match_requests SET reported_at = CASE WHEN reported_at IS NULL THEN now() ELSE NULL END
+         WHERE id = $1`, [id]);
     } else {
       throw new HttpError(400, "Action inconnue.");
     }

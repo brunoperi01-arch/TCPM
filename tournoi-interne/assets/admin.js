@@ -3,7 +3,8 @@
 // ce qui garantit que le navigateur renvoie l'identifiant saisi).
 import {
   CATEGORIES, TERRAINS, MOTIFS, FORM_URL, SIGNATURE, prenom, fmtPhone, joueursDe, estAVenir, levelInfo,
-  DURATIONS, DEFAULT_DURATION, finCreneau, fmtDuree, joursEntre, heuresSerie,
+  DURATIONS, DEFAULT_DURATION, finCreneau, fmtDuree, joursEntre, heuresSerie, nowParis,
+  analyseScore, fmtScore,
 } from "./config.js";
 import { readXlsx, parseTableau, parseListe, construireImport } from "./moja.js";
 import { esc, btnData, fmtDay, fmtShort, fmtTime, header, api, onAction } from "./ui.js";
@@ -15,12 +16,16 @@ let D = { pools: [], entries: {}, slots: [], contacts: {} };
 const getPoule = (id) => D.pools.find((p) => p.id === id);
 let loaded = false, loadError = null, busy = false;
 let S = { section: "demandes", tab: "pending", val: null, court: null, refuse: null, refReason: null, cancel: null,
-  msg: null, msgId: null, err: null, pool: null, poolText: "", imp: null, impOpen: false, rename: null, report: null,
+  msg: null, msgId: null, err: null, pool: null, poolText: "", imp: null, impOpen: false,
+  resTab: "avalider", fix: null, fixSets: [["", ""], ["", ""], ["", ""]], fixType: "normal", fixWinner: null, rename: null, report: null,
   slotForm: { date: "", time: "18:00", capacity: 2, duration: DEFAULT_DURATION }, showPast: false, contactFilter: "missing",
   slotMode: "serie", selMode: false, sel: new Set(),
   batch: { from: "", to: "", days: [1, 2, 3, 4, 5], start: "18:00", end: "22:00", duration: DEFAULT_DURATION, capacity: 2 } };
 const JOURS = [[1, "L"], [2, "M"], [3, "M"], [4, "J"], [5, "V"], [6, "S"], [0, "D"]];
 const slotOf = (date, time) => D.slots.find((x) => x.date === date && x.time === time);
+const finDe = (r) => finCreneau(r.time, slotOf(r.date, r.time)?.duration);
+const joue = (r) => r.status === "confirmed" && `${r.date} ${finDe(r)}` <= nowParis();
+const vainqueur = (r) => (r.winner_side === 1 ? r.player : r.winner_side === 2 ? r.opponent : "");
 const plage = (date, time) => `${fmtTime(time)} – ${fmtTime(finCreneau(time, slotOf(date, time)?.duration))}`;
 
 async function load() {
@@ -60,7 +65,7 @@ async function action(payload, okMsg) {
     const i = requests.findIndex((r) => r.id === request.id);
     if (i >= 0) requests[i] = request;
     if (okMsg) { S.msg = okMsg(request); S.msgId = request.id; }
-    S.val = S.court = S.refuse = S.refReason = S.cancel = null;
+    S.val = S.court = S.refuse = S.refReason = S.cancel = S.fix = null;
   } catch (e) {
     S.err = e.message;
     await load();
@@ -95,6 +100,16 @@ function waButton(r, side) {
   return `<button class="btn btn-wa ${done ? "sent" : ""}" ${btnData("wa", `${r.id}:${side}`)}>${done ? `✓ ${nom} prévenu` : `Prévenir ${nom}`}</button>`;
 }
 const waButtons = (r) => `<div class="row">${waButton(r, 1)}${waButton(r, 2)}</div>`;
+
+function waRelance(r, side) {
+  const moi = side === 1 ? r.player : r.opponent, lui = side === 1 ? r.opponent : r.player;
+  const txt = `🎾 Tournoi interne TCPM\nBonjour ${prenom(moi)}, le score de votre match contre ${lui} ` +
+    `du ${fmtDay(r.date).toLowerCase()} n'a pas encore été saisi.\nMerci de l'enregistrer ici : ${FORM_URL}\n\n${SIGNATURE}`;
+  const tel = phoneOf(r, side);
+  const nom = esc(prenom(moi));
+  if (!tel) return `<button class="btn btn-sec" disabled>${nom} : pas de numéro</button>`;
+  return `<a class="btn btn-wa" href="https://wa.me/${tel}?text=${encodeURIComponent(txt)}" target="_blank" rel="noopener">Relancer ${nom}</a>`;
+}
 const toNotify = (r) => [1, 2].filter((s) => phoneOf(r, s) && !notifiedOf(r, s)).length;
 
 /* ---------- Écran ---------- */
@@ -152,7 +167,7 @@ function vDemandes() {
   const by = (s) => requests.filter((r) => s.includes(r.status));
   const pend = by(["pending"]), conf = by(["confirmed"]), other = by(["refused", "cancelled"]);
   const aPrevenir = [...conf, ...other].reduce((n, r) => n + toNotify(r), 0);
-  const list = { pending: pend, confirmed: conf, other }[S.tab];
+  const list = { pending: pend, confirmed: conf.filter((r) => !joue(r)), other }[S.tab];
   const empty = { pending: "Aucune demande en attente.", confirmed: "Aucun match confirmé.", other: "Aucune demande refusée ou annulée." }[S.tab];
   const msgReq = S.msgId && requests.find((r) => r.id === S.msgId);
   return `
@@ -384,13 +399,81 @@ function vNumeros() {
       <p class="hint">Videz le champ puis 💾 pour supprimer un numéro.</p>` : ""}`;
 }
 
-const SECTIONS = [["demandes", "Demandes"], ["poules", "Poules"], ["creneaux", "Créneaux"], ["numeros", "Numéros"]];
+/* ---------- Résultats ---------- */
+function setRowFix(i) {
+  const [a, b] = S.fixSets[i];
+  const superTB = i === 2 && S.fixType === "normal";
+  return `<div class="setrow"><span>${superTB ? "Super TB" : `Set ${i + 1}`}</span>
+    <input class="setin" id="f${i}a" type="number" inputmode="numeric" min="0" max="${superTB ? 30 : 7}" value="${esc(a)}">
+    <em>/</em>
+    <input class="setin" id="f${i}b" type="number" inputmode="numeric" min="0" max="${superTB ? 30 : 7}" value="${esc(b)}"></div>`;
+}
+function fixForm(r) {
+  const special = S.fixType !== "normal";
+  return `<p class="ask">Score — ${esc(r.player)} à gauche</p>
+    ${special && S.fixType === "wo" ? "" : [0, 1, 2].map(setRowFix).join("")}
+    <div class="chips">${Object.entries({ normal: "Score normal", wo: "WO", retired: "Abandon" }).map(([k, l]) =>
+      `<button class="chip mode ${S.fixType === k ? "sel" : ""}" ${btnData("fixType", k)}>${l}</button>`).join("")}</div>
+    ${special ? `<p class="ask">Vainqueur</p><div class="chips">
+      <button class="chip mode ${S.fixWinner === 1 ? "sel" : ""}" ${btnData("fixWin", 1)}>${esc(r.player)}</button>
+      <button class="chip mode ${S.fixWinner === 2 ? "sel" : ""}" ${btnData("fixWin", 2)}>${esc(r.opponent)}</button></div>` : ""}
+    <div class="row"><button class="btn btn-sec" ${btnData("fixX")}>Retour</button>
+      <button class="btn btn-ok" ${busy ? "disabled" : ""} ${btnData("fixOk", r.id)}>ENREGISTRER ET VALIDER</button></div>`;
+}
+function resultCard(r, mode) {
+  const score = fmtScore(r.score, r.result_type);
+  const head = `<div class="top"><div class="players">${esc(r.player)}<i>contre</i>${esc(r.opponent)}</div>
+      ${score ? `<span class="badge ${r.validated ? "b-ok" : "b-wait"}">${esc(score)}</span>` : ""}</div>
+    <div class="pool">${esc(r.pool)}</div>
+    <div class="when">${fmtDay(r.date)}, ${plage(r.date, r.time)}${r.court ? `, ${esc(r.court)}` : ""}</div>
+    ${vainqueur(r) ? `<div class="contact">Vainqueur : <b style="color:#6ff0a8">${esc(vainqueur(r))}</b>${r.score_by ? ` · saisi par ${esc(r.score_by)}` : ""}</div>` : ""}`;
+  if (S.fix === r.id) return `<div class="card confirmed">${head}${fixForm(r)}</div>`;
+  let body = "";
+  if (mode === "avalider") {
+    body = `<div class="row"><button class="btn btn-sec" ${btnData("fix", r.id)}>Corriger</button>
+      <button class="btn btn-ok" ${busy ? "disabled" : ""} ${btnData("valScore", r.id)}>VALIDER</button></div>`;
+  } else if (mode === "asaisir") {
+    body = `<div class="row">${waRelance(r, 1)}${waRelance(r, 2)}</div>
+      <div class="row"><button class="btn btn-sec" ${btnData("fix", r.id)}>Saisir le score</button></div>`;
+  } else {
+    body = `<div class="row">
+      <button class="btn btn-sec" ${btnData("fix", r.id)}>Corriger</button>
+      <button class="btn ${r.reported ? "btn-wa sent" : "btn-ok"}" ${btnData("moja", r.id)}>${r.reported ? "✓ Reporté dans MOJA" : "📋 Marquer reporté MOJA"}</button></div>`;
+  }
+  return `<div class="card ${r.validated ? "confirmed" : ""}">${head}${body}</div>`;
+}
+function vResultats() {
+  const joues = requests.filter(joue);
+  const aValider = joues.filter((r) => r.scored && !r.validated);
+  const aSaisir = joues.filter((r) => !r.scored);
+  const termines = joues.filter((r) => r.validated);
+  const aReporter = termines.filter((r) => !r.reported).length;
+  const list = { avalider: aValider, asaisir: aSaisir, termines }[S.resTab];
+  const empty = { avalider: "Aucun score en attente de validation.", asaisir: "Tous les scores ont été saisis ✅",
+    termines: "Aucun résultat validé pour l'instant." }[S.resTab];
+  return `<div class="stats">
+      <div class="stat s-wait"><b>${aValider.length}</b><span>à valider</span></div>
+      <div class="stat"><b>${aSaisir.length}</b><span>sans score</span></div>
+      <div class="stat s-conf"><b>${termines.length}</b><span>terminés</span></div>
+    </div>
+    ${aReporter ? `<div class="info">📋 ${aReporter} résultat${aReporter > 1 ? "s" : ""} à reporter dans MOJA</div>` : ""}
+    <div class="tabs">
+      <button class="${S.resTab === "avalider" ? "on" : ""}" ${btnData("resTab", "avalider")}>À valider</button>
+      <button class="${S.resTab === "asaisir" ? "on" : ""}" ${btnData("resTab", "asaisir")}>Sans score</button>
+      <button class="${S.resTab === "termines" ? "on" : ""}" ${btnData("resTab", "termines")}>Terminés</button>
+    </div>
+    ${list.length ? list.map((r) => resultCard(r, S.resTab)).join("") : `<div class="empty">${empty}</div>`}`;
+}
+
+const SECTIONS = [["demandes", "Demandes"], ["resultats", "Résultats"], ["poules", "Poules"], ["creneaux", "Créneaux"], ["numeros", "Numéros"]];
 function vAdmin() {
   const pend = requests.filter((r) => r.status === "pending").length;
+  const scores = requests.filter((r) => joue(r) && r.scored && !r.validated).length;
+  const badges = { demandes: pend, resultats: scores };
   const nav = `<nav class="nav">${SECTIONS.map(([k, l]) =>
-    `<button class="${S.section === k ? "on" : ""}" ${btnData("section", k)}>${l}${k === "demandes" && pend ? ` <i>${pend}</i>` : ""}</button>`).join("")}</nav>`;
+    `<button class="${S.section === k ? "on" : ""}" ${btnData("section", k)}>${l}${badges[k] ? ` <i>${badges[k]}</i>` : ""}</button>`).join("")}</nav>`;
   const alerts = `${S.err ? `<div class="err">${esc(S.err)}</div>` : ""}${S.section !== "demandes" && S.msg ? `<div class="info">${S.msg}</div>` : ""}`;
-  const views = { demandes: vDemandes, poules: vPoules, creneaux: vCreneaux, numeros: vNumeros };
+  const views = { demandes: vDemandes, resultats: vResultats, poules: vPoules, creneaux: vCreneaux, numeros: vNumeros };
   return nav + alerts + views[S.section]();
 }
 
@@ -398,6 +481,10 @@ function render() {
   const ta = document.getElementById("poolText");
   if (ta) S.poolText = ta.value;
   readBatch();
+  if (S.fix) [0, 1, 2].forEach((i) => {
+    const a = document.getElementById(`f${i}a`), b = document.getElementById(`f${i}b`);
+    if (a && b) S.fixSets[i] = [a.value, b.value];
+  });
   if (S.imp) {
     S.imp.pools.forEach((p, i) => {
       const cb = document.querySelector(`[data-imp-pool="${i}"]`), tx = document.querySelector(`[data-imp-entries="${i}"]`);
@@ -414,7 +501,7 @@ function render() {
   app.innerHTML = header("Administration") + `<main>${body}</main>` + `<div class="ball" aria-hidden="true"></div>`;
 }
 
-const keep = ["court", "reason", "wa", "pool", "ren", "renX", "cf", "past", "day", "daysPreset", "sel", "selDay", "slotMode"];
+const keep = ["court", "reason", "wa", "pool", "ren", "renX", "cf", "past", "day", "daysPreset", "sel", "selDay", "slotMode", "fixType", "fixWin", "fix", "resTab"];
 onAction(async (act, v, e) => {
   if (!keep.includes(act)) { S.msg = null; S.msgId = null; S.err = null; }
   switch (act) {
@@ -587,6 +674,29 @@ onAction(async (act, v, e) => {
       return manage({ action: "slot_delete", id: v }, "Créneau supprimé.");
     case "past": S.showPast = !S.showPast; break;
 
+    /* Résultats */
+    case "resTab": S.resTab = v; S.fix = null; break;
+    case "fix": {
+      const r = requests.find((x) => x.id === v);
+      S.fix = v; S.fixType = r.result_type || "normal"; S.fixWinner = r.winner_side || null;
+      S.fixSets = [0, 1, 2].map((i) => (r.score?.[i] || ["", ""]).map(String));
+      break;
+    }
+    case "fixX": S.fix = null; break;
+    case "fixType": S.fixType = v; S.fixWinner = null; break;
+    case "fixWin": S.fixWinner = Number(v); break;
+    case "fixOk": {
+      const sets = S.fixSets.filter(([a, b]) => a !== "" || b !== "").map(([a, b]) => [Number(a), Number(b)]);
+      const check = analyseScore(sets, S.fixType, S.fixWinner);
+      if (check.error) { S.err = check.error; break; }
+      return action({ action: "score", id: v, sets, type: S.fixType, winner: S.fixWinner },
+        (r) => `✅ Score enregistré : ${esc(fmtScore(r.score, r.result_type))}, victoire ${esc(vainqueur(r))}.`);
+    }
+    case "valScore": return action({ action: "validate_score", id: v },
+      (r) => `✅ Résultat validé : ${esc(r.player)} ${esc(fmtScore(r.score, r.result_type))} ${esc(r.opponent)}.`);
+    case "moja": return action({ action: "moja", id: v },
+      (r) => (r.reported ? "📋 Marqué comme reporté dans MOJA." : "Marque « reporté » retirée."));
+
     /* Numéros */
     case "cf": S.contactFilter = v; break;
     case "saveTel": {
@@ -610,6 +720,10 @@ function readBatch() {
 const onBatch = (e) => {
   if (!e.target.matches("[data-batch]")) return;
   readBatch();
+  if (S.fix) [0, 1, 2].forEach((i) => {
+    const a = document.getElementById(`f${i}a`), b = document.getElementById(`f${i}b`);
+    if (a && b) S.fixSets[i] = [a.value, b.value];
+  });
   const box = document.getElementById("batchPreview");
   if (box) box.innerHTML = batchPreview();
 };

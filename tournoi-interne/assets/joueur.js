@@ -1,6 +1,7 @@
 // Page joueur : demande de créneau
 import {
-  CATEGORIES, JAT_PHONE, levelInfo, estAVenir, isActive, pairKey, slotState, normPhone, finCreneau,
+  CATEGORIES, JAT_PHONE, FORM_URL, levelInfo, estAVenir, isActive, pairKey, slotState, normPhone,
+  finCreneau, prenom,
 } from "./config.js";
 import { esc, btnData, fmtDay, fmtShort, fmtTime, header, matchCard, api, onAction } from "./ui.js";
 
@@ -131,9 +132,26 @@ function vSlot() {
       return `<button class="slot ${st.type}" ${st.type !== "ok" ? "disabled" : ""} ${btnData("slot", c.i)}><b>${fmtTime(c.time)}</b><i>→ ${fmtTime(finCreneau(c.time, c.duration))}</i><span>${lbl}</span></button>`;
     }).join("") + `</div>`
   ).join("");
-  return `<p class="q">Choisissez un créneau</p><p class="sub">${esc(S.player)} contre ${esc(S.opp)}</p>` +
+  return `<p class="q">Choisissez un créneau</p><p class="sub">${esc(S.player)} contre ${esc(S.opp)}</p>
+    <p class="hint tip">Pas encore d'accord avec votre adversaire ? Envoyez-lui un message avant de demander un créneau.</p>
+    ${waPartage(messageAccord(getPoule(S.poule).nom), "💬 Écrire à mon adversaire")}
+    <div class="sep"></div>` +
     (html || `<div class="empty">Aucun créneau ouvert pour le moment. Revenez bientôt.</div>`) +
     (html ? `<p class="note">« Déjà engagé » : un des joueurs a déjà un match sur ce créneau.</p>` : "");
+}
+function waPartage(texte, label) {
+  return `<a class="cta wa" href="https://wa.me/?text=${encodeURIComponent(texte)}" target="_blank" rel="noopener">${label}</a>`;
+}
+function messageAccord(pool) {
+  return `Salut ${prenom(S.opp)}, c'est ${prenom(S.player)} (tournoi interne TCPM 🎾).\n` +
+    `On doit jouer notre match de ${pool}. Quels créneaux t'arrangent ?\n` +
+    `Voici ceux ouverts par le club : ${FORM_URL}`;
+}
+function messageDemande(r) {
+  return `Salut ${prenom(r.opponent)}, c'est ${prenom(r.player)} (tournoi interne TCPM 🎾).\n` +
+    `J'ai demandé au club le créneau du ${fmtDay(r.date).toLowerCase()}, ${fmtTime(r.time)} – ${fmtTime(r.end)} pour notre match (${r.pool}).\n` +
+    `Ça te va ? Le club confirmera le terrain et nous préviendra tous les deux.\n` +
+    `Si ça ne va pas, dis-le-moi et je referai une demande : ${FORM_URL}`;
 }
 function contactField(side, entry, role) {
   if (known(entry))
@@ -165,7 +183,9 @@ function vDone() {
   return `<div class="done"><div class="check">✓</div>
     <h2>Demande envoyée au club</h2><p>Votre créneau doit maintenant être confirmé. Les deux joueurs seront prévenus sur WhatsApp.</p></div>` +
     matchCard(r.catLabel, r.pool, r.player, r.opponent, r.date, r.time, r.end) +
-    `<button class="cta dark" ${btnData("again")}>Faire une autre demande</button>
+    waPartage(messageDemande(r), "💬 Prévenir mon adversaire sur WhatsApp") +
+    `<p class="note">WhatsApp s'ouvre avec le message prêt : choisissez votre adversaire dans vos contacts.</p>
+     <button class="cta dark" ${btnData("again")}>Faire une autre demande</button>
      <a class="cta dark jat" href="${jatLink(r)}" target="_blank" rel="noopener">Une question ? Écrire au juge-arbitre</a>`;
 }
 

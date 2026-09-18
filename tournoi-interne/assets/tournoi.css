@@ -246,3 +246,6 @@ input[type=file]::file-selector-button{font:inherit;font-weight:700;border:0;bor
 .slot:disabled i{color:#4a5d85}
 .vs .when small{font-weight:500;font-size:13px}
 .grid3.grid2 .field:first-child{grid-column:auto}
+.cta.wa{display:block;text-align:center;text-decoration:none;background:#25d366;color:#04210f;font-size:18px;padding:15px;box-shadow:0 0 22px rgba(37,211,102,.3)}
+.hint.tip{margin:0 0 10px}
+.sep{height:1px;background:var(--line);margin:18px 0 6px}

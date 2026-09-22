@@ -1,7 +1,7 @@
 // POST /api/tournoi/request — création d'une demande (statut pending)
 // Tout est revérifié ici : le navigateur n'est jamais cru sur parole.
 import { withTx, sendError, HttpError, body } from "../_lib/db.js";
-import { loadData, fromClient, contactOf, findPool } from "../_lib/data.js";
+import { loadData, fromClient, contactOf, findPool, fixturesOf, fixtureExists } from "../_lib/data.js";
 import {
   estAVenir, clean, normPhone, slotState, DATE_RE, TIME_RE,
 } from "../../tournoi-interne/assets/config.js";
@@ -25,6 +25,10 @@ export default async function handler(req, res) {
       const entrees = data.entries[poule.id] || [];
       if (!entrees.includes(player) || !entrees.includes(opponent))
         throw new HttpError(400, "Joueur inconnu dans cette poule.");
+
+      // Si la poule a des rencontres programmées, seule une affiche prévue est acceptée
+      if (fixturesOf(data, poule.id).length && !fixtureExists(data, poule.id, player, opponent))
+        throw new HttpError(409, "Cette rencontre n'est pas au programme du tour.");
 
       const creneau = data.slots.find((s) => s.active && s.date === b.date && s.time === b.time);
       if (!creneau) throw new HttpError(400, "Ce créneau n'est plus proposé.");

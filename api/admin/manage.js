@@ -103,6 +103,7 @@ const handlers = {
       const { rows: old } = await db.query(`SELECT id, nom FROM pools WHERE NOT (id = ANY($1))`, [ids]);
       for (const o of old) {
         if (await hasRequests(db, "pool = $1", [o.nom])) { report.kept.push(o.nom); continue; }
+        await db.query(`DELETE FROM fixtures WHERE pool_id = $1`, [o.id]);
         await db.query(`DELETE FROM pool_entries WHERE pool_id = $1`, [o.id]);
         await db.query(`DELETE FROM pools WHERE id = $1`, [o.id]);
       }
@@ -120,10 +121,47 @@ const handlers = {
     return { report };
   },
 
+  // Rencontres programmées (TMC : un tour à la fois)
+  async fixture_add(db, b) {
+    const poule = await getPool(db, b.poolId);
+    const round = Number(b.round);
+    if (!(round >= 1 && round <= 20)) throw new HttpError(400, "Tour invalide (1 à 20).");
+    const e1 = formatEntree(b.entry1);
+    const e2 = b.entry2 ? formatEntree(b.entry2) : null;
+    const { rows: entries } = await db.query(`SELECT name FROM pool_entries WHERE pool_id = $1`, [poule.id]);
+    const noms = entries.map((r) => r.name);
+    if (!noms.includes(e1) || (e2 && !noms.includes(e2))) throw new HttpError(400, "Équipe inconnue dans cette poule.");
+    if (e2 && e1 === e2) throw new HttpError(400, "Deux équipes différentes sont nécessaires.");
+
+    const { rows: deja } = await db.query(
+      `SELECT entry1, entry2 FROM fixtures WHERE pool_id = $1 AND round = $2`, [poule.id, round]);
+    const pris = new Set(deja.flatMap((f) => [f.entry1, f.entry2]).filter(Boolean));
+    for (const e of [e1, e2].filter(Boolean)) {
+      if (pris.has(e)) throw new HttpError(409, `${e} a déjà une rencontre au tour ${round}.`);
+    }
+    await db.query(
+      `INSERT INTO fixtures (pool_id, round, entry1, entry2) VALUES ($1, $2, $3, $4)`, [poule.id, round, e1, e2]);
+    return {};
+  },
+
+  async fixture_delete(db, b) {
+    const { rows } = await db.query(
+      `SELECT f.pool_id, f.entry1, f.entry2, p.nom FROM fixtures f JOIN pools p ON p.id = f.pool_id WHERE f.id = $1`, [String(b.id)]);
+    const f = rows[0];
+    if (!f) throw new HttpError(404, "Rencontre introuvable.");
+    if (f.entry2 && await hasRequests(db,
+      `pool = $1 AND status IN ('pending','confirmed') AND ((player = $2 AND opponent = $3) OR (player = $3 AND opponent = $2))`,
+      [f.nom, f.entry1, f.entry2]))
+      throw new HttpError(409, "Une demande existe déjà pour cette rencontre.");
+    await db.query(`DELETE FROM fixtures WHERE id = $1`, [String(b.id)]);
+    return {};
+  },
+
   async pool_delete(db, b) {
     const poule = await getPool(db, b.poolId);
     if (await hasRequests(db, "pool = $1", [poule.nom]))
       throw new HttpError(409, "Impossible : des demandes existent pour cette poule.");
+    await db.query(`DELETE FROM fixtures WHERE pool_id = $1`, [poule.id]);
     await db.query(`DELETE FROM pool_entries WHERE pool_id = $1`, [poule.id]);
     await db.query(`DELETE FROM pools WHERE id = $1`, [poule.id]);
     return {};
@@ -168,6 +206,8 @@ const handlers = {
     const { rowCount } = await db.query(
       `UPDATE pool_entries SET name = $3 WHERE pool_id = $1 AND name = $2`, [poule.id, oldName, newName]);
     if (!rowCount) throw new HttpError(404, "Nom introuvable.");
+    await db.query(`UPDATE fixtures SET entry1 = $3 WHERE pool_id = $1 AND entry1 = $2`, [poule.id, oldName, newName]);
+    await db.query(`UPDATE fixtures SET entry2 = $3 WHERE pool_id = $1 AND entry2 = $2`, [poule.id, oldName, newName]);
     return {};
   },
 
@@ -176,6 +216,7 @@ const handlers = {
     const name = clean(b.name);
     if (await hasRequests(db, "pool = $1 AND (player = $2 OR opponent = $2)", [poule.nom, name]))
       throw new HttpError(409, "Impossible : des demandes existent déjà pour ce nom.");
+    await db.query(`DELETE FROM fixtures WHERE pool_id = $1 AND (entry1 = $2 OR entry2 = $2)`, [poule.id, name]);
     await db.query(`DELETE FROM pool_entries WHERE pool_id = $1 AND name = $2`, [poule.id, name]);
     return {};
   },

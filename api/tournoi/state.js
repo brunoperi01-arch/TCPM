@@ -15,7 +15,7 @@ export default async function handler(req, res) {
       .filter((s) => s.active && estAVenir(s))
       .map(({ date, time, capacity, duration }) => ({ date, time, capacity, duration }));
     res.setHeader("Cache-Control", "no-store");
-    return res.status(200).json({ requests, pools: data.pools, entries: data.entries, creneaux, known: entreesConnues(data) });
+    return res.status(200).json({ requests, pools: data.pools, entries: data.entries, fixtures: data.fixtures, creneaux, known: entreesConnues(data) });
   } catch (err) {
     return sendError(res, err);
   }

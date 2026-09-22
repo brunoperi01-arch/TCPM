@@ -259,3 +259,6 @@ input[type=file]::file-selector-button{font:inherit;font-weight:700;border:0;bor
 .setin{-moz-appearance:textfield}
 .chip.mode.sel{border-color:var(--ball);background:rgba(217,240,58,.15);color:var(--ball)}
 .nav i{font-size:11px;padding:0 5px}
+.field.search{margin-top:10px}
+.field.search input{background:rgba(4,11,31,.7) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%238fd3ff' stroke-width='2.5' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E") no-repeat 14px center;padding-left:44px}
+#searchResults{margin-top:10px}

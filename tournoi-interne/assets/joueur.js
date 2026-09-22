@@ -7,15 +7,28 @@ import { esc, btnData, fmtDay, fmtShort, fmtTime, header, matchCard, api, onActi
 
 const app = document.getElementById("app");
 const fresh = () => ({ step: "cat", hist: [], cat: null, groupe: null, poule: null, player: null, opp: null,
-  slot: null, err: null, last: null, phone1: "", phone2: "", sending: false,
+  slot: null, err: null, last: null, phone1: "", phone2: "", sending: false, q: "",
   score: null, sets: [["", ""], ["", ""], ["", ""]], scoreType: "normal", scoreWinner: null, scoreDone: null });
 let S = fresh();
-let DATA = { requests: [], known: [], pools: [], entries: {}, creneaux: [] };
+let DATA = { requests: [], known: [], pools: [], entries: {}, creneaux: [], fixtures: [] };
 const entreesDe = (id) => DATA.entries[id] || [];
 const getPoule = (id) => DATA.pools.find((p) => p.id === id);
 const poolsOf = (cat, level) => DATA.pools.filter((p) => p.category === cat && (!level || p.level === level));
 const levelsOf = (cat) => [...new Set(poolsOf(cat).map((p) => p.level))];
 const ouverte = (p) => entreesDe(p.id).length >= 2;
+const fixturesDe = (id) => DATA.fixtures.filter((f) => f.pool_id === id);
+/** Adversaires autorisés : toutes les entrées, ou uniquement les affiches programmées */
+function adversaires(poolId, moi) {
+  const fx = fixturesDe(poolId);
+  if (!fx.length) return { libre: true, liste: entreesDe(poolId).filter((e) => e !== moi) };
+  const miennes = fx.filter((f) => f.entry1 === moi || f.entry2 === moi);
+  return {
+    libre: false,
+    liste: miennes.map((f) => (f.entry1 === moi ? f.entry2 : f.entry1)).filter(Boolean),
+    exempt: miennes.some((f) => !f.entry2),
+    tours: miennes.length,
+  };
+}
 const termine = (r) => `${r.date} ${finDe(r.date, r.time)}` <= nowParis();
 const finDe = (date, time) => finCreneau(time, DATA.creneaux.find((c) => c.date === date && c.time === time)?.duration);
 let loaded = false, loadError = null;
@@ -59,10 +72,38 @@ function go(step) {
 function back() { S.step = S.hist.pop() || "cat"; S.err = null; render(); }
 
 /* ---------- Écrans ---------- */
+const sansAccent = (t) => String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+/** Toutes les inscriptions qui contiennent le texte tapé (nom, prénom, équipe) */
+function chercher(q) {
+  const mots = sansAccent(q).split(/\s+/).filter(Boolean);
+  if (!mots.length || sansAccent(q).replace(/\s/g, "").length < 2) return [];
+  const out = [];
+  for (const p of DATA.pools) {
+    for (const e of entreesDe(p.id)) {
+      const t = sansAccent(e);
+      if (mots.every((m) => t.includes(m))) out.push({ pool: p, entree: e });
+    }
+  }
+  return out.slice(0, 12);
+}
+function resultatsRecherche(q) {
+  const res = chercher(q);
+  if (!q || q.trim().length < 2) return "";
+  if (!res.length) return `<p class="hint">Aucun joueur trouvé. Vérifiez l'orthographe ou choisissez votre catégorie ci-dessous.</p>`;
+  return res.map(({ pool, entree }, i) =>
+    `<button class="big" ${btnData("found", `${pool.id}|${entree}`)}><span class="grow">${esc(entree)}<small>${esc(pool.nom)}</small></span><span class="chev">›</span></button>`
+  ).join("");
+}
+
 function vCat() {
   const cats = Object.entries(CATEGORIES).filter(([k]) => poolsOf(k).length);
   if (!cats.length) return `<div class="empty">Les poules ne sont pas encore publiées. Revenez bientôt 🎾</div>`;
-  return `<p class="q">Choisissez votre catégorie</p><p class="sub">Demande de créneau pour votre match</p>` +
+  return `<p class="q">Trouver mon nom</p>
+    <div class="field search"><input id="search" type="search" autocomplete="off" autocapitalize="words"
+      placeholder="Tapez votre nom ou prénom" value="${esc(S.q || "")}" aria-label="Rechercher mon nom"></div>
+    <div id="searchResults">${resultatsRecherche(S.q)}</div>
+    <p class="q" style="margin-top:22px">Ou choisissez votre catégorie</p><p class="sub">Demande de créneau ou saisie de score</p>` +
     cats.map(([k, label]) => {
       const levels = levelsOf(k);
       const info = levels.length > 1 ? levels.map((l) => levelInfo(l).label).join(", ")
@@ -95,8 +136,9 @@ function vPlayer() {
 }
 function vOpp() {
   const p = getPoule(S.poule);
+  const adv = adversaires(p.id, S.player);
   let dispo = 0;
-  const rows = entreesDe(p.id).filter((e) => e !== S.player).map((e) => {
+  const rows = adv.liste.map((e) => {
     const r = findMatch(p.nom, S.player, e);
     let badge, small = "", dis = true;
     if (r && r.status === "confirmed") {
@@ -131,8 +173,19 @@ function vOpp() {
     }
     return `<button class="big" ${dis ? "disabled" : ""} ${btnData("opp", e)}><span class="grow">${esc(e)}${small ? `<small>${small}</small>` : ""}</span>${badge}</button>`;
   }).join("");
-  return `<p class="q">Votre adversaire</p><p class="sub">${esc(S.player)}, ${p.nom}</p>` +
-    (dispo ? "" : `<div class="info">Tous vos matchs sont déjà demandés ou programmés.</div>`) + rows;
+
+  const titre = adv.libre ? "Votre adversaire" : adv.liste.length > 1 ? "Vos rencontres" : "Votre rencontre";
+  let info = "";
+  if (!adv.libre && !adv.liste.length)
+    info = adv.exempt
+      ? `<div class="info">Vous êtes exempt(e) de ce tour. La prochaine rencontre sera publiée après le tirage. 🎾</div>`
+      : `<div class="info">Votre rencontre n'est pas encore publiée. Le club l'ajoute après chaque tirage.</div>`;
+  else if (!adv.libre)
+    info = `<p class="hint tip">Rencontre${adv.liste.length > 1 ? "s" : ""} fixée${adv.liste.length > 1 ? "s" : ""} par le tirage du tournoi.</p>`;
+  else if (!dispo)
+    info = `<div class="info">Tous vos matchs sont déjà demandés ou programmés.</div>`;
+
+  return `<p class="q">${titre}</p><p class="sub">${esc(S.player)}, ${p.nom}</p>` + info + rows;
 }
 function vSlot() {
   const future = DATA.creneaux.map((c, i) => ({ ...c, i })).filter(estAVenir)
@@ -324,6 +377,15 @@ function render() {
 
 onAction((act, v) => {
   switch (act) {
+    case "found": {
+      const i = v.indexOf("|");
+      const pool = getPoule(v.slice(0, i));
+      if (!pool) return;
+      S.cat = pool.category; S.groupe = pool.level; S.poule = pool.id; S.player = v.slice(i + 1);
+      S.hist = ["cat"]; S.step = "opp"; S.err = null;
+      render(); window.scrollTo(0, 0); load();
+      return;
+    }
     case "cat": S.cat = v; S.groupe = null; S.poule = null; return suite();
     case "groupe": S.groupe = v; S.poule = null; return suite();
     case "poule": S.poule = v; return go("player");
@@ -344,6 +406,13 @@ onAction((act, v) => {
     case "again": S = fresh(); render(); return window.scrollTo(0, 0);
     case "reload": loaded = false; render(); return load();
   }
+});
+
+document.addEventListener("input", (e) => {
+  if (e.target.id !== "search") return;
+  S.q = e.target.value;
+  const box = document.getElementById("searchResults");
+  if (box) box.innerHTML = resultatsRecherche(S.q);
 });
 
 render();

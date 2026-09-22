@@ -12,12 +12,12 @@ import { esc, btnData, fmtDay, fmtShort, fmtTime, header, api, onAction } from "
 const API = "/tournoi-interne/admin/api";
 const app = document.getElementById("app");
 let requests = [];
-let D = { pools: [], entries: {}, slots: [], contacts: {} };
+let D = { pools: [], entries: {}, slots: [], contacts: {}, fixtures: [] };
 const getPoule = (id) => D.pools.find((p) => p.id === id);
 let loaded = false, loadError = null, busy = false;
 let S = { section: "demandes", tab: "pending", val: null, court: null, refuse: null, refReason: null, cancel: null,
   msg: null, msgId: null, err: null, pool: null, poolText: "", imp: null, impOpen: false,
-  resTab: "avalider", fix: null, fixSets: [["", ""], ["", ""], ["", ""]], fixType: "normal", fixWinner: null, rename: null, report: null,
+  resTab: "avalider", fxRound: 1, fxA: "", fxB: "", fix: null, fixSets: [["", ""], ["", ""], ["", ""]], fixType: "normal", fixWinner: null, rename: null, report: null,
   slotForm: { date: "", time: "18:00", capacity: 2, duration: DEFAULT_DURATION }, showPast: false, contactFilter: "missing",
   slotMode: "serie", selMode: false, sel: new Set(),
   batch: { from: "", to: "", days: [1, 2, 3, 4, 5], start: "18:00", end: "22:00", duration: DEFAULT_DURATION, capacity: 2 } };
@@ -31,7 +31,7 @@ const plage = (date, time) => `${fmtTime(time)} – ${fmtTime(finCreneau(time, s
 async function load() {
   try {
     const r = await api(`${API}/requests`);
-    requests = r.requests; D = { pools: r.pools, entries: r.entries, slots: r.slots, contacts: r.contacts };
+    requests = r.requests; D = { pools: r.pools, entries: r.entries, slots: r.slots, contacts: r.contacts, fixtures: r.fixtures };
     if (!getPoule(S.pool)) S.pool = D.pools[0]?.id ?? null;
     loadError = null;
   } catch (e) { loadError = e.message; }
@@ -227,6 +227,42 @@ function vImport() {
   </div>`;
 }
 
+const fixturesDe = (id) => (D.fixtures || []).filter((f) => f.pool_id === id);
+
+function fixtureEtat(poolNom, f) {
+  if (!f.entry2) return `<span class="badge b-grey">Exempt</span>`;
+  const r = requests.find((x) => x.pool === poolNom && !["refused", "cancelled"].includes(x.status) &&
+    ((x.player === f.entry1 && x.opponent === f.entry2) || (x.player === f.entry2 && x.opponent === f.entry1)));
+  if (!r) return `<span class="badge b-full">À organiser</span>`;
+  if (r.status === "pending") return `<span class="badge b-wait">Demande à valider</span>`;
+  if (r.validated) return `<span class="badge b-ok">✅ ${esc(fmtScore(r.score, r.result_type))}</span>`;
+  if (r.scored) return `<span class="badge b-wait">Score à valider</span>`;
+  return `<span class="badge b-conf">${fmtShort(r.date)} ${fmtTime(r.time)}</span>`;
+}
+
+function vFixtures(p, list) {
+  const fx = fixturesDe(p.id);
+  const tours = [...new Set(fx.map((f) => f.round))].sort((a, b) => a - b);
+  const opts = (sel) => `<option value="">—</option>` +
+    list.map((e) => `<option ${e === sel ? "selected" : ""}>${esc(e)}</option>`).join("");
+  const blocs = tours.map((t) => `<p class="day">Tour ${t}</p>` + fx.filter((f) => f.round === t).map((f) =>
+    `<div class="line"><div class="grow"><b>${esc(f.entry1)}</b>${f.entry2 ? `<small>contre ${esc(f.entry2)}</small>` : `<small>exempt ce tour</small>`}</div>
+      ${fixtureEtat(p.nom, f)}
+      <button class="icon" ${btnData("fxDel", f.id)} aria-label="Supprimer">🗑</button></div>`).join("")).join("");
+  return `<div class="login">
+      <p class="ask-title" style="margin-top:0">Rencontres du tour ${fx.length ? "" : "(TMC)"}</p>
+      <p class="hint">Tant qu'aucune rencontre n'est saisie, toutes les équipes peuvent se jouer entre elles.
+        Dès qu'une rencontre existe, chaque équipe ne voit que son adversaire.</p>
+      <div class="grid3 grid2">
+        <div class="field"><label for="fxRound">Tour</label><input id="fxRound" type="number" min="1" max="20" value="${S.fxRound}"></div>
+      </div>
+      <div class="field"><label for="fxA">Équipe 1</label><select id="fxA">${opts(S.fxA)}</select></div>
+      <div class="field"><label for="fxB">Équipe 2 <small>(vide = exempt)</small></label><select id="fxB">${opts(S.fxB)}</select></div>
+      <button class="cta" ${busy ? "disabled" : ""} ${btnData("fxAdd")}>AJOUTER LA RENCONTRE</button>
+    </div>
+    ${blocs}`;
+}
+
 function vPoules() {
   const imp = vImport();
   if (!D.pools.length) {
@@ -275,6 +311,7 @@ function vPoules() {
       <p class="hint">Un ${mixte ? "binôme" : "joueur"} par ligne. Numéro facultatif après « ; »${mixte ? " (un par joueur)" : ""}.</p>
       <button class="cta" ${busy ? "disabled" : ""} ${btnData("addEntries")}>AJOUTER</button>
     </div>
+    ${vFixtures(p, list)}
     ${poolLocked ? "" : `<button class="toggle danger" ${btnData("delPool", p.id)}>Supprimer ${esc(p.nom)}</button>`}`;
 }
 
@@ -494,6 +531,8 @@ function render() {
     const rp = document.getElementById("impReplace");
     if (rp) S.imp.replace = rp.checked;
   }
+  const fxA = document.getElementById("fxA"), fxB = document.getElementById("fxB"), fxR = document.getElementById("fxRound");
+  if (fxA) { S.fxA = fxA.value; S.fxB = fxB.value; S.fxRound = Number(fxR.value) || 1; }
   let body;
   if (!loaded) body = `<div class="loading">Chargement…</div>`;
   else if (loadError) body = `<div class="err">${esc(loadError)}</div><button class="cta dark" ${btnData("reload")}>Réessayer</button>`;
@@ -595,6 +634,19 @@ onAction(async (act, v, e) => {
       if (r) { S.report = r; if (!r.errors.length) S.poolText = ""; render(); }
       return;
     }
+    case "fxAdd": {
+      const round = Number(document.getElementById("fxRound").value);
+      const entry1 = document.getElementById("fxA").value, entry2 = document.getElementById("fxB").value;
+      S.fxRound = round;
+      if (!entry1) { S.err = "Choisissez au moins l'équipe 1."; break; }
+      const r = await manage({ action: "fixture_add", poolId: S.pool, round, entry1, entry2: entry2 || null },
+        entry2 ? `Rencontre ajoutée au tour ${round}.` : `${entry1} déclaré exempt au tour ${round}.`);
+      if (r) { S.fxA = ""; S.fxB = ""; render(); }
+      return;
+    }
+    case "fxDel":
+      if (!window.confirm("Supprimer cette rencontre ?")) return;
+      return manage({ action: "fixture_delete", id: v }, "Rencontre supprimée.");
     case "ren": S.rename = v; S.report = null; break;
     case "renX": S.rename = null; break;
     case "renOk": {

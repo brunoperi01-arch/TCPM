@@ -1,6 +1,6 @@
 // Données gérées depuis l'admin : joueurs des poules, créneaux, numéros.
 // Serveur uniquement : les numéros ne sortent que vers l'admin protégé.
-import { joueursDe, sortPools } from "../../tournoi-interne/assets/config.js";
+import { joueursDe, sortPools, pairKey, resolveFixtures } from "../../tournoi-interne/assets/config.js";
 
 /** q = (texte SQL, paramètres) => lignes */
 export const fromSql = (sql) => (t, p = []) => sql.query(t, p);
@@ -14,7 +14,7 @@ export async function loadData(q) {
               to_char(slot_time, 'HH24:MI') AS time, capacity, duration_min AS duration, active
        FROM tournament_slots ORDER BY slot_date, slot_time`),
     q(`SELECT name, phone FROM player_contacts ORDER BY name`),
-    q(`SELECT id::text AS id, pool_id, round, entry1, entry2 FROM fixtures ORDER BY pool_id, round, id`),
+    q(`SELECT id::text AS id, pool_id, round, entry1, entry2, src1::text AS src1, src2::text AS src2 FROM fixtures ORDER BY pool_id, round, id`),
   ]);
   const entries = {};
   for (const r of entryRows) (entries[r.pool_id] ||= []).push(r.name);
@@ -35,6 +35,7 @@ export const findPool = (data, id) => data.pools.find((p) => p.id === id) || nul
 
 /** Rencontres programmées d'une poule (vide = tout le monde peut jouer contre tout le monde) */
 export const fixturesOf = (data, poolId) => data.fixtures.filter((f) => f.pool_id === poolId);
-/** L'affiche existe-t-elle ? (ordre indifférent) */
-export const fixtureExists = (data, poolId, a, b) =>
-  fixturesOf(data, poolId).some((f) => (f.entry1 === a && f.entry2 === b) || (f.entry1 === b && f.entry2 === a));
+/** L'affiche existe-t-elle, une fois les vainqueurs reportés ? (ordre indifférent) */
+export const fixtureExists = (data, requests, poolId, a, b) =>
+  resolveFixtures(fixturesOf(data, poolId), requests, data.pools)
+    .some((f) => f.e1 && f.e2 && pairKey(f.e1, f.e2) === pairKey(a, b));

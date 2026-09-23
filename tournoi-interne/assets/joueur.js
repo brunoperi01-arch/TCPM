@@ -1,7 +1,7 @@
 // Page joueur : demande de créneau
 import {
   CATEGORIES, JAT_PHONE, FORM_URL, levelInfo, estAVenir, isActive, pairKey, slotState, normPhone,
-  finCreneau, prenom, analyseScore, fmtScore, nowParis,
+  finCreneau, prenom, analyseScore, fmtScore, nowParis, resolveFixtures, libelleFixture,
 } from "./config.js";
 import { esc, btnData, fmtDay, fmtShort, fmtTime, header, matchCard, api, onAction } from "./ui.js";
 
@@ -16,18 +16,19 @@ const getPoule = (id) => DATA.pools.find((p) => p.id === id);
 const poolsOf = (cat, level) => DATA.pools.filter((p) => p.category === cat && (!level || p.level === level));
 const levelsOf = (cat) => [...new Set(poolsOf(cat).map((p) => p.level))];
 const ouverte = (p) => entreesDe(p.id).length >= 2;
-const fixturesDe = (id) => DATA.fixtures.filter((f) => f.pool_id === id);
+const fixturesDe = (id) => resolveFixtures(DATA.fixtures.filter((f) => f.pool_id === id), DATA.requests, DATA.pools);
 /** Adversaires autorisés : toutes les entrées, ou uniquement les affiches programmées */
 function adversaires(poolId, moi) {
   const fx = fixturesDe(poolId);
   if (!fx.length) return { libre: true, liste: entreesDe(poolId).filter((e) => e !== moi) };
-  const miennes = fx.filter((f) => f.entry1 === moi || f.entry2 === moi);
-  return {
-    libre: false,
-    liste: miennes.map((f) => (f.entry1 === moi ? f.entry2 : f.entry1)).filter(Boolean),
-    exempt: miennes.some((f) => !f.entry2),
-    tours: miennes.length,
-  };
+  const miennes = fx.filter((f) => f.e1 === moi || f.e2 === moi);
+  const liste = [], attentes = [];
+  for (const f of miennes) {
+    const autre = f.e1 === moi ? f.e2 : f.e1;
+    if (autre) liste.push(autre);
+    else if (!f.exempt) attentes.push(f.e1 === moi ? f.l2 : f.l1);
+  }
+  return { libre: false, liste, attentes, exempt: miennes.some((f) => f.exempt) };
 }
 const termine = (r) => `${r.date} ${finDe(r.date, r.time)}` <= nowParis();
 const finDe = (date, time) => finCreneau(time, DATA.creneaux.find((c) => c.date === date && c.time === time)?.duration);
@@ -176,7 +177,9 @@ function vOpp() {
 
   const titre = adv.libre ? "Votre adversaire" : adv.liste.length > 1 ? "Vos rencontres" : "Votre rencontre";
   let info = "";
-  if (!adv.libre && !adv.liste.length)
+  if (!adv.libre && !adv.liste.length && adv.attentes?.length)
+    info = `<div class="info">Votre prochain adversaire : <b>${esc(adv.attentes[0])}</b>.<br>Vous pourrez réserver dès que ce match sera joué. 🎾</div>`;
+  else if (!adv.libre && !adv.liste.length)
     info = adv.exempt
       ? `<div class="info">Vous êtes exempt(e) de ce tour. La prochaine rencontre sera publiée après le tirage. 🎾</div>`
       : `<div class="info">Votre rencontre n'est pas encore publiée. Le club l'ajoute après chaque tirage.</div>`;

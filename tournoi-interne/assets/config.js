@@ -185,3 +185,55 @@ export const fmtScore = (sets, type) => {
   if (type === "retired") return base ? `${base} ab.` : "Abandon";
   return base;
 };
+
+/* ---------- Tableau à élimination ---------- */
+/**
+ * Résout les rencontres : un côté peut être une équipe, ou le vainqueur d'une autre rencontre.
+ * Renvoie chaque rencontre avec e1, e2 (noms résolus ou null), leurs libellés, et son vainqueur.
+ */
+export function resolveFixtures(fixtures, requests, pools) {
+  const nomOf = (id) => pools.find((p) => p.id === id)?.nom;
+  const byId = new Map(fixtures.map((f) => [String(f.id), f]));
+  const memo = new Map();
+
+  const cote = (f, n, d) => {
+    const direct = n === 1 ? f.entry1 : f.entry2;
+    if (direct) return direct;
+    const src = n === 1 ? f.src1 : f.src2;
+    return src ? vainqueur(byId.get(String(src)), d + 1) : null;
+  };
+  function vainqueur(f, d = 0) {
+    if (!f || d > 12) return null;
+    const k = String(f.id);
+    if (memo.has(k)) return memo.get(k);
+    memo.set(k, null); // garde anti-boucle
+    const a = cote(f, 1, d), b = cote(f, 2, d);
+    let w = null;
+    if (a && !b && !f.src2) w = a; // exempt : qualifié d'office
+    else if (a && b) {
+      const r = requests.find((x) => x.pool === nomOf(f.pool_id) && x.validated &&
+        pairKey(x.player, x.opponent) === pairKey(a, b));
+      if (r) w = r.winner_side === 1 ? r.player : r.opponent;
+    }
+    memo.set(k, w);
+    return w;
+  }
+  const libelleCote = (f, n, d = 0) => {
+    const nom = cote(f, n, d);
+    if (nom) return nom;
+    const src = n === 1 ? f.src1 : f.src2;
+    const sf = src && byId.get(String(src));
+    if (!sf || d > 6) return null;
+    return `Vainqueur de ${libelleCote(sf, 1, d + 1) || "?"} – ${libelleCote(sf, 2, d + 1) || "?"}`;
+  };
+
+  return fixtures.map((f) => ({
+    ...f,
+    e1: cote(f, 1, 0), e2: cote(f, 2, 0),
+    l1: libelleCote(f, 1), l2: libelleCote(f, 2),
+    exempt: !!(cote(f, 1, 0) && !f.entry2 && !f.src2),
+    winner: vainqueur(f, 0),
+    pret: !!(cote(f, 1, 0) && cote(f, 2, 0)),
+  }));
+}
+export const libelleFixture = (f) => f.exempt ? `${f.l1} (exempt)` : `${f.l1 || "?"} – ${f.l2 || "?"}`;

@@ -126,21 +126,39 @@ const handlers = {
     const poule = await getPool(db, b.poolId);
     const round = Number(b.round);
     if (!(round >= 1 && round <= 20)) throw new HttpError(400, "Tour invalide (1 à 20).");
-    const e1 = formatEntree(b.entry1);
-    const e2 = b.entry2 ? formatEntree(b.entry2) : null;
     const { rows: entries } = await db.query(`SELECT name FROM pool_entries WHERE pool_id = $1`, [poule.id]);
     const noms = entries.map((r) => r.name);
-    if (!noms.includes(e1) || (e2 && !noms.includes(e2))) throw new HttpError(400, "Équipe inconnue dans cette poule.");
-    if (e2 && e1 === e2) throw new HttpError(400, "Deux équipes différentes sont nécessaires.");
+    const { rows: fx } = await db.query(`SELECT id::text AS id, round FROM fixtures WHERE pool_id = $1`, [poule.id]);
 
+    // Chaque côté : "e:Nom d'équipe" ou "f:id" (vainqueur d'une rencontre)
+    const cote = (v, n) => {
+      if (!v) return { entry: null, src: null };
+      const val = String(v);
+      if (val.startsWith("f:")) {
+        const src = fx.find((x) => x.id === val.slice(2));
+        if (!src) throw new HttpError(400, `Rencontre source inconnue (côté ${n}).`);
+        if (Number(src.round) >= round) throw new HttpError(400, "La rencontre source doit être d'un tour précédent.");
+        return { entry: null, src: src.id };
+      }
+      const nom = formatEntree(val.startsWith("e:") ? val.slice(2) : val);
+      if (!noms.includes(nom)) throw new HttpError(400, "Équipe inconnue dans cette poule.");
+      return { entry: nom, src: null };
+    };
+    const c1 = cote(b.entry1, 1), c2 = cote(b.entry2, 2);
+    if (!c1.entry && !c1.src) throw new HttpError(400, "Choisissez l'équipe 1 (ou un vainqueur).");
+    if (c1.entry && c2.entry && c1.entry === c2.entry) throw new HttpError(400, "Deux équipes différentes sont nécessaires.");
+    if (c1.src && c2.src && c1.src === c2.src) throw new HttpError(400, "Deux rencontres sources différentes sont nécessaires.");
+
+    // Une équipe nommée ne peut pas avoir deux rencontres au même tour
     const { rows: deja } = await db.query(
       `SELECT entry1, entry2 FROM fixtures WHERE pool_id = $1 AND round = $2`, [poule.id, round]);
     const pris = new Set(deja.flatMap((f) => [f.entry1, f.entry2]).filter(Boolean));
-    for (const e of [e1, e2].filter(Boolean)) {
+    for (const e of [c1.entry, c2.entry].filter(Boolean)) {
       if (pris.has(e)) throw new HttpError(409, `${e} a déjà une rencontre au tour ${round}.`);
     }
     await db.query(
-      `INSERT INTO fixtures (pool_id, round, entry1, entry2) VALUES ($1, $2, $3, $4)`, [poule.id, round, e1, e2]);
+      `INSERT INTO fixtures (pool_id, round, entry1, entry2, src1, src2) VALUES ($1, $2, $3, $4, $5, $6)`,
+      [poule.id, round, c1.entry, c2.entry, c1.src, c2.src]);
     return {};
   },
 
@@ -149,10 +167,13 @@ const handlers = {
       `SELECT f.pool_id, f.entry1, f.entry2, p.nom FROM fixtures f JOIN pools p ON p.id = f.pool_id WHERE f.id = $1`, [String(b.id)]);
     const f = rows[0];
     if (!f) throw new HttpError(404, "Rencontre introuvable.");
-    if (f.entry2 && await hasRequests(db,
+    if (f.entry1 && f.entry2 && await hasRequests(db,
       `pool = $1 AND status IN ('pending','confirmed') AND ((player = $2 AND opponent = $3) OR (player = $3 AND opponent = $2))`,
       [f.nom, f.entry1, f.entry2]))
       throw new HttpError(409, "Une demande existe déjà pour cette rencontre.");
+    const { rows: dep } = await db.query(
+      `SELECT 1 FROM fixtures WHERE src1 = $1::bigint OR src2 = $1::bigint LIMIT 1`, [String(b.id)]);
+    if (dep.length) throw new HttpError(409, "Une rencontre d'un tour suivant dépend de celle-ci.");
     await db.query(`DELETE FROM fixtures WHERE id = $1`, [String(b.id)]);
     return {};
   },

@@ -27,8 +27,13 @@ export default async function handler(req, res) {
         throw new HttpError(400, "Joueur inconnu dans cette poule.");
 
       // Si la poule a des rencontres programmées, seule une affiche prévue est acceptée
-      if (fixturesOf(data, poule.id).length && !fixtureExists(data, poule.id, player, opponent))
-        throw new HttpError(409, "Cette rencontre n'est pas au programme du tour.");
+      if (fixturesOf(data, poule.id).length) {
+        const { rows: dejaJoues } = await db.query(
+          `SELECT pool, player, opponent, winner_side, validated_at IS NOT NULL AS validated
+           FROM match_requests WHERE pool = $1`, [poule.nom]);
+        if (!fixtureExists(data, dejaJoues, poule.id, player, opponent))
+          throw new HttpError(409, "Cette rencontre n'est pas au programme du tableau.");
+      }
 
       const creneau = data.slots.find((s) => s.active && s.date === b.date && s.time === b.time);
       if (!creneau) throw new HttpError(400, "Ce créneau n'est plus proposé.");

@@ -4,7 +4,7 @@
 import {
   CATEGORIES, TERRAINS, MOTIFS, FORM_URL, SIGNATURE, prenom, fmtPhone, joueursDe, estAVenir, levelInfo,
   DURATIONS, DEFAULT_DURATION, finCreneau, fmtDuree, joursEntre, heuresSerie, nowParis,
-  analyseScore, fmtScore,
+  analyseScore, fmtScore, resolveFixtures, libelleFixture,
 } from "./config.js";
 import { readXlsx, parseTableau, parseListe, construireImport } from "./moja.js";
 import { esc, btnData, fmtDay, fmtShort, fmtTime, header, api, onAction } from "./ui.js";
@@ -227,12 +227,13 @@ function vImport() {
   </div>`;
 }
 
-const fixturesDe = (id) => (D.fixtures || []).filter((f) => f.pool_id === id);
+const fixturesDe = (id) => resolveFixtures((D.fixtures || []).filter((f) => f.pool_id === id), requests, D.pools);
 
 function fixtureEtat(poolNom, f) {
-  if (!f.entry2) return `<span class="badge b-grey">Exempt</span>`;
+  if (f.exempt) return `<span class="badge b-grey">Exempt, qualifié</span>`;
+  if (!f.pret) return `<span class="badge b-wait">En attente</span>`;
   const r = requests.find((x) => x.pool === poolNom && !["refused", "cancelled"].includes(x.status) &&
-    ((x.player === f.entry1 && x.opponent === f.entry2) || (x.player === f.entry2 && x.opponent === f.entry1)));
+    ((x.player === f.e1 && x.opponent === f.e2) || (x.player === f.e2 && x.opponent === f.e1)));
   if (!r) return `<span class="badge b-full">À organiser</span>`;
   if (r.status === "pending") return `<span class="badge b-wait">Demande à valider</span>`;
   if (r.validated) return `<span class="badge b-ok">✅ ${esc(fmtScore(r.score, r.result_type))}</span>`;
@@ -243,10 +244,13 @@ function fixtureEtat(poolNom, f) {
 function vFixtures(p, list) {
   const fx = fixturesDe(p.id);
   const tours = [...new Set(fx.map((f) => f.round))].sort((a, b) => a - b);
-  const opts = (sel) => `<option value="">—</option>` +
-    list.map((e) => `<option ${e === sel ? "selected" : ""}>${esc(e)}</option>`).join("");
+  const opts = (sel) => `<option value="">—</option>
+    <optgroup label="Équipes">${list.map((e) =>
+      `<option value="e:${esc(e)}" ${`e:${e}` === sel ? "selected" : ""}>${esc(e)}</option>`).join("")}</optgroup>` +
+    (fx.length ? `<optgroup label="Vainqueur de…">${fx.filter((f) => !f.exempt).map((f) =>
+      `<option value="f:${f.id}" ${`f:${f.id}` === sel ? "selected" : ""}>T${f.round} · ${esc(libelleFixture(f))}</option>`).join("")}</optgroup>` : "");
   const blocs = tours.map((t) => `<p class="day">Tour ${t}</p>` + fx.filter((f) => f.round === t).map((f) =>
-    `<div class="line"><div class="grow"><b>${esc(f.entry1)}</b>${f.entry2 ? `<small>contre ${esc(f.entry2)}</small>` : `<small>exempt ce tour</small>`}</div>
+    `<div class="line"><div class="grow"><b>${esc(f.l1 || "?")}</b>${f.exempt ? `<small>exempt, qualifié pour le tour suivant</small>` : `<small>contre ${esc(f.l2 || "?")}</small>`}${f.winner ? `<small class="ok">Vainqueur : ${esc(f.winner)}</small>` : ""}</div>
       ${fixtureEtat(p.nom, f)}
       <button class="icon" ${btnData("fxDel", f.id)} aria-label="Supprimer">🗑</button></div>`).join("")).join("");
   return `<div class="login">
@@ -257,7 +261,8 @@ function vFixtures(p, list) {
         <div class="field"><label for="fxRound">Tour</label><input id="fxRound" type="number" min="1" max="20" value="${S.fxRound}"></div>
       </div>
       <div class="field"><label for="fxA">Équipe 1</label><select id="fxA">${opts(S.fxA)}</select></div>
-      <div class="field"><label for="fxB">Équipe 2 <small>(vide = exempt)</small></label><select id="fxB">${opts(S.fxB)}</select></div>
+      <div class="field"><label for="fxB">Équipe 2 <small>(vide = exempt, qualifié d'office)</small></label><select id="fxB">${opts(S.fxB)}</select></div>
+      <p class="hint">« Vainqueur de… » remplit le nom automatiquement dès que le score du match source est validé.</p>
       <button class="cta" ${busy ? "disabled" : ""} ${btnData("fxAdd")}>AJOUTER LA RENCONTRE</button>
     </div>
     ${blocs}`;

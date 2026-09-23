@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#040b1f">
+<title>Tournoi interne TCPM — Mode d'emploi</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Permanent+Marker&family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --night:#040b1f;--electric:#4fb3ff;--glow:#8fd3ff;--ball:#d9f03a;--text:#eaf1ff;
+  --muted:#93a7cc;--line:rgba(143,211,255,.2);--glass:rgba(18,56,128,.42);--dim:rgba(8,22,56,.6);
+  --cond:'Barlow Condensed','Arial Narrow',Arial,sans-serif;--brush:'Permanent Marker',Impact,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{background:var(--night)}
+body{font-family:Inter,system-ui,sans-serif;color:var(--text);-webkit-font-smoothing:antialiased;
+  background:
+    radial-gradient(circle at 8% 3%,rgba(255,255,255,.9) 0 2px,transparent 3px),
+    radial-gradient(circle at 92% 6%,rgba(255,255,255,.9) 0 2px,transparent 3px),
+    radial-gradient(ellipse 55% 20% at 8% 2%,rgba(79,179,255,.4),transparent 70%),
+    radial-gradient(ellipse 55% 20% at 92% 5%,rgba(79,179,255,.3),transparent 70%),
+    linear-gradient(180deg,#0c2660 0%,#071a45 28%,#050f2c 60%,#040b1f 100%);
+  background-attachment:fixed}
+.wrap{max-width:760px;margin:0 auto;padding:24px 18px 48px}
+
+header{text-align:center;margin-bottom:30px}
+.club{font-family:var(--cond);font-weight:600;letter-spacing:.38em;font-size:12px;text-transform:uppercase;color:var(--glow)}
+h1{font-family:var(--brush);font-weight:400;text-transform:uppercase;line-height:.88;margin-top:12px;transform:rotate(-4deg)}
+h1 span{display:block;-webkit-background-clip:text;background-clip:text;color:transparent}
+h1 .t1{font-size:clamp(44px,11vw,72px);margin-right:26px;
+  background-image:linear-gradient(175deg,#fff 0%,#dfe6f1 38%,#8392ad 50%,#eef2f8 62%,#b9c4d6 100%);
+  filter:drop-shadow(0 0 10px rgba(79,179,255,.55))}
+h1 .t2{font-size:clamp(46px,12vw,78px);margin-left:32px;
+  background-image:linear-gradient(175deg,#d6f0ff 0%,#5cc0ff 40%,#1f73ff 100%);
+  filter:drop-shadow(0 0 14px rgba(47,125,255,.9))}
+.baseline{font-family:var(--cond);font-size:20px;letter-spacing:.04em;text-transform:uppercase;color:#fff;margin-top:18px}
+.baseline b{color:var(--ball)}
+
+.cta{display:block;max-width:460px;margin:22px auto 0;background:var(--ball);color:var(--night);
+  border-radius:14px;padding:16px;text-align:center;text-decoration:none;
+  font-family:var(--cond);font-size:23px;font-weight:800;letter-spacing:.04em;
+  box-shadow:0 0 26px rgba(217,240,58,.35)}
+.url{text-align:center;font-size:13px;color:var(--muted);margin-top:10px;word-break:break-all}
+
+h2{font-family:var(--cond);font-size:26px;font-weight:700;text-transform:uppercase;color:#fff;margin:34px 0 4px}
+h2 small{display:block;font-family:Inter,sans-serif;font-size:13px;font-weight:400;text-transform:none;color:var(--muted);margin-top:2px}
+
+.steps{counter-reset:s;margin-top:16px}
+.step{counter-increment:s;display:flex;gap:14px;background:var(--glass);border:1px solid var(--line);
+  border-radius:14px;padding:16px;margin-bottom:10px}
+.step::before{content:counter(s);flex:none;width:40px;height:40px;border-radius:50%;
+  background:var(--electric);color:var(--night);font-family:var(--cond);font-size:24px;font-weight:800;
+  display:grid;place-items:center}
+.step b{display:block;font-size:17px;color:#fff;margin-bottom:3px}
+.step p{font-size:14px;color:var(--muted);line-height:1.5}
+.step em{font-style:normal;color:var(--glow)}
+
+.cards{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));margin-top:14px}
+.card{background:var(--dim);border:1px solid var(--line);border-radius:14px;padding:16px}
+.card b{display:block;color:#fff;font-size:15px;margin-bottom:5px}
+.card p{font-size:14px;color:var(--muted);line-height:1.5}
+.card.hl{border-color:rgba(217,240,58,.45);background:rgba(217,240,58,.07)}
+.card.hl b{color:var(--ball)}
+
+.badges{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.badge{font-size:13px;font-weight:600;padding:7px 12px;border-radius:99px;border:1px solid var(--line);background:var(--dim)}
+.b1{color:#6ff0a8}.b2{color:#ffc977}.b3{color:#a8dcff}.b4{color:var(--ball)}
+
+footer{margin-top:36px;text-align:center;font-size:14px;color:var(--muted);line-height:1.7}
+footer b{color:#fff}
+.sig{font-family:var(--brush);font-size:22px;color:var(--ball);margin-top:10px;transform:rotate(-2deg);display:inline-block}
+
+@media print{
+  body{background:#fff;color:#0a2350}
+  .wrap{max-width:none;padding:0}
+  h1 .t1,h1 .t2{filter:none;-webkit-text-fill-color:initial;color:#0a2350;background:none}
+  .step,.card,.badge{background:#fff;border-color:#c9d2e0;color:#0a2350}
+  .step p,.card p,footer{color:#41506b}
+  .step::before{background:#0a2350;color:#fff}
+  .cta{background:#0a2350;color:#fff;box-shadow:none}
+  .club,.baseline,h2,.card b,.step b{color:#0a2350}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="club">TC Pennes-Mirabeau</div>
+    <h1><span class="t1">Tournoi</span><span class="t2">Interne</span></h1>
+    <p class="baseline">Réservez vos matchs <b>en 1 minute</b></p>
+    <a class="cta" href="https://tcpm.vercel.app/tournoi-interne/gestion.html">RÉSERVER MON MATCH</a>
+    <p class="url">tcpm.vercel.app/tournoi-interne/gestion.html</p>
+  </header>
+
+  <h2>Organiser un match
+    <small>Plus besoin d'écrire au club pour savoir si un terrain est libre.</small></h2>
+  <div class="steps">
+    <div class="step"><div><b>Tapez votre nom</b>
+      <p>Deux lettres suffisent. Vous arrivez directement sur vos adversaires, en simple comme en double mixte.</p></div></div>
+    <div class="step"><div><b>Mettez-vous d'accord</b>
+      <p>Un bouton <em>« Écrire à mon adversaire »</em> ouvre WhatsApp avec le message déjà rédigé.</p></div></div>
+    <div class="step"><div><b>Choisissez un créneau</b>
+      <p>Seuls les créneaux ouverts par le club sont proposés, avec le nombre de terrains encore disponibles.</p></div></div>
+    <div class="step"><div><b>Envoyez la demande</b>
+      <p>Le club vérifie les terrains, attribue le vôtre et vous prévient <em>tous les deux</em> sur WhatsApp.</p></div></div>
+    <div class="step"><div><b>Jouez, puis saisissez le score</b>
+      <p>Après le match, l'un des deux joueurs saisit le score au même endroit. Le juge-arbitre le valide et le reporte dans MOJA.</p></div></div>
+  </div>
+
+  <h2>Le statut de vos matchs</h2>
+  <div class="badges">
+    <span class="badge b1">Disponible — à organiser</span>
+    <span class="badge b2">Demande en attente du club</span>
+    <span class="badge b3">Programmé — date et terrain</span>
+    <span class="badge b4">🏆 Score à saisir</span>
+    <span class="badge b1">✅ Résultat validé</span>
+  </div>
+
+  <h2>Bon à savoir</h2>
+  <div class="cards">
+    <div class="card hl"><b>Une demande n'est pas une réservation</b>
+      <p>Le terrain n'est réservé qu'une fois la confirmation reçue. Attendez-la avant de venir.</p></div>
+    <div class="card"><b>Le club attribue les terrains</b>
+      <p>Vous choisissez la date et l'heure, le club choisit le court en fonction des cours et de l'école de tennis.</p></div>
+    <div class="card"><b>De nouveaux créneaux arrivent</b>
+      <p>Si rien ne vous convient, revenez quelques jours plus tard : la liste est mise à jour régulièrement.</p></div>
+    <div class="card"><b>Double mixte</b>
+      <p>Votre adversaire s'affiche automatiquement selon le tableau. S'il n'est pas encore connu, vous verrez le match qui le désignera.</p></div>
+    <div class="card"><b>Empêché ? Blessé ?</b>
+      <p>Prévenez votre adversaire et le juge-arbitre au plus vite : le créneau sera libéré pour d'autres.</p></div>
+    <div class="card"><b>Une question ?</b>
+      <p>Un bouton vous permet d'écrire directement au juge-arbitre depuis l'application.</p></div>
+  </div>
+
+  <footer>
+    MOJA reste l'outil officiel FFT : poules, tableau et résultats y sont enregistrés.<br>
+    Cette application sert uniquement à <b>organiser vos matchs et réserver les terrains</b>.
+    <div class="sig">Bruno, juge-arbitre 🎾</div>
+  </footer>
+</div>
+</body>
+</html>

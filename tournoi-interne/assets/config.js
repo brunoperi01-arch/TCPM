@@ -6,7 +6,7 @@
 
 export const FORM_URL = "https://tcpm.vercel.app/tournoi-interne/gestion.html";
 export const JAT_PHONE = "33687726423"; // WhatsApp du juge-arbitre (bouton « Une question ? »)
-export const SIGNATURE = "Bruno Peri, juge-arbitre du tournoi";
+export const SIGNATURE = "Bruno, juge-arbitre du tournoi";
 export const TERRAINS = ["Terrain 1", "Terrain 2", "Terrain 3", "Terrain 4", "Terrain 5", "Terrain 6"];
 export const MOTIFS = ["Créneau indisponible", "Erreur de joueur", "Match déjà programmé", "Autre"];
 

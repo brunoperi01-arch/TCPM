@@ -86,11 +86,11 @@ function waMessage(r, side) {
   const quand = `${fmtDay(r.date).toLowerCase()} de ${fmtTime(r.time)} à ${fin}`;
   let txt;
   if (r.status === "confirmed")
-    txt = `✅ Tournoi interne TCPM\nBonjour ${prenom(moi)}, votre match contre ${lui} est confirmé ${quand}, ${r.court}.\nBon match ! 🎾`;
+    txt = `✅ Tournoi interne TCPM\nBonjour ${prenom(moi)}, ton match contre ${lui} est confirmé ${quand}, ${r.court}.\nBon match ! 🎾`;
   else if (r.status === "refused")
     txt = `❌ Tournoi interne TCPM\nBonjour ${prenom(moi)}, ${side === 1 ? "votre demande" : `la demande de ${lui}`} pour le match ${r.player} contre ${r.opponent} du ${quand} n'a pas pu être acceptée${r.reason ? ` (${r.reason.toLowerCase()})` : ""}.\nUne nouvelle demande peut être faite ici : ${FORM_URL}`;
   else
-    txt = `⚠️ Tournoi interne TCPM\nBonjour ${prenom(moi)}, votre match contre ${lui} du ${quand} est annulé.\nUne nouvelle demande peut être faite ici : ${FORM_URL}`;
+    txt = `⚠️ Tournoi interne TCPM\nBonjour ${prenom(moi)}, ton match contre ${lui} du ${quand} est annulé.\nUne nouvelle demande peut être faite ici : ${FORM_URL}`;
   return `${txt}\n\n${SIGNATURE}`;
 }
 function waButton(r, side) {

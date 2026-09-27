@@ -16,8 +16,9 @@ let D = { pools: [], entries: {}, slots: [], contacts: {}, fixtures: [] };
 const getPoule = (id) => D.pools.find((p) => p.id === id);
 let loaded = false, loadError = null, busy = false;
 let S = { section: "demandes", tab: "pending", val: null, court: null, refuse: null, refReason: null, cancel: null,
-  msg: null, msgId: null, err: null, pool: null, poolText: "", imp: null, impOpen: false,
-  resTab: "avalider", fxRound: 1, fxA: "", fxB: "", fix: null, fixSets: [["", ""], ["", ""], ["", ""]], fixType: "normal", fixWinner: null, rename: null, report: null,
+  msg: null, msgId: null, err: null, pool: null, poolText: "", imp: null, impOpen: false, move: null,
+  notifOpen: false, notifNew: "", notified: new Set(),
+  resTab: "avalider", suiviOpen: null, fxRound: 1, fxA: "", fxB: "", fix: null, fixSets: [["", ""], ["", ""], ["", ""]], fixType: "normal", fixWinner: null, rename: null, report: null,
   slotForm: { date: "", time: "18:00", capacity: 2, duration: DEFAULT_DURATION }, showPast: false, contactFilter: "missing",
   slotMode: "serie", selMode: false, sel: new Set(),
   batch: { from: "", to: "", days: [1, 2, 3, 4, 5], start: "18:00", end: "22:00", duration: DEFAULT_DURATION, capacity: 2 } };
@@ -86,11 +87,11 @@ function waMessage(r, side) {
   const quand = `${fmtDay(r.date).toLowerCase()} de ${fmtTime(r.time)} à ${fin}`;
   let txt;
   if (r.status === "confirmed")
-    txt = `✅ Tournoi interne TCPM\nBonjour ${prenom(moi)}, ton match contre ${lui} est confirmé ${quand}, ${r.court}.\nBon match ! 🎾`;
+    txt = `✅ Tournoi interne TCPM\nBonjour ${prenom(moi)}, votre match contre ${lui} est confirmé ${quand}, ${r.court}.\nBon match ! 🎾`;
   else if (r.status === "refused")
     txt = `❌ Tournoi interne TCPM\nBonjour ${prenom(moi)}, ${side === 1 ? "votre demande" : `la demande de ${lui}`} pour le match ${r.player} contre ${r.opponent} du ${quand} n'a pas pu être acceptée${r.reason ? ` (${r.reason.toLowerCase()})` : ""}.\nUne nouvelle demande peut être faite ici : ${FORM_URL}`;
   else
-    txt = `⚠️ Tournoi interne TCPM\nBonjour ${prenom(moi)}, ton match contre ${lui} du ${quand} est annulé.\nUne nouvelle demande peut être faite ici : ${FORM_URL}`;
+    txt = `⚠️ Tournoi interne TCPM\nBonjour ${prenom(moi)}, votre match contre ${lui} du ${quand} est annulé.\nUne nouvelle demande peut être faite ici : ${FORM_URL}`;
   return `${txt}\n\n${SIGNATURE}`;
 }
 function waButton(r, side) {
@@ -268,6 +269,44 @@ function vFixtures(p, list) {
     ${blocs}`;
 }
 
+/* ---------- Prévenir la poule ---------- */
+function messagePoule(p, joueur, nouveau) {
+  const autres = (D.entries[p.id] || []).filter((e) => e !== joueur);
+  const moi = prenom(joueur);
+  if (nouveau && joueur === nouveau)
+    return `🎾 Tournoi interne TCPM\nBonjour ${moi}, vous êtes inscrit(e) en ${p.nom}.\n` +
+      `Vos adversaires : ${autres.join(", ")}.\nRéservez vos matchs ici : ${FORM_URL}\n\n${SIGNATURE}`;
+  const intro = nouveau
+    ? `${nouveau} rejoint votre poule (${p.nom}) : vous avez donc un match de plus à organiser.`
+    : `la composition de votre poule (${p.nom}) a évolué : pensez à vérifier vos matchs restants.`;
+  return `🎾 Tournoi interne TCPM\nBonjour ${moi}, ${intro}\nRéservez ici : ${FORM_URL}\n\n${SIGNATURE}`;
+}
+
+function vNotifPoule(p, list) {
+  if (!S.notifOpen)
+    return `<button class="toggle" ${btnData("notifOpen")}>📣 Prévenir les joueurs de cette poule</button>`;
+  const restants = list.filter((e) => !S.notified.has(e) && contactDe(e)).length;
+  return `<div class="login">
+    <p class="ask-title" style="margin-top:0">Prévenir ${esc(p.nom)}</p>
+    <div class="field"><label for="notifNew">Nouveau joueur (facultatif)</label>
+      <select id="notifNew"><option value="">— aucun, message générique —</option>
+        ${list.map((e) => `<option ${e === S.notifNew ? "selected" : ""}>${esc(e)}</option>`).join("")}</select></div>
+    <p class="hint">${restants} message${restants > 1 ? "s" : ""} à envoyer. Chaque bouton ouvre WhatsApp avec le texte prêt.</p>
+    ${list.map((e) => {
+      const tel = contactDe(e);
+      const nom = esc(prenom(e));
+      if (!tel) return `<div class="line"><div class="grow"><b>${esc(e)}</b><small class="ko">numéro manquant</small></div></div>`;
+      const done = S.notified.has(e);
+      return `<div class="line"><div class="grow"><b>${esc(e)}</b>${e === S.notifNew ? `<small class="ok">nouveau</small>` : ""}</div>
+        <a class="btn btn-wa ${done ? "sent" : ""}" style="flex:0 0 150px" ${btnData("notifWa", e)}
+           href="https://wa.me/${tel}?text=${encodeURIComponent(messagePoule(p, e, S.notifNew))}"
+           target="_blank" rel="noopener">${done ? `✓ ${nom} prévenu` : `Prévenir ${nom}`}</a></div>`;
+    }).join("")}
+    <div class="row"><button class="btn btn-sec" ${btnData("notifX")}>Fermer</button></div>
+  </div>`;
+}
+const contactDe = (entree) => joueursDe(entree).map((j) => D.contacts[j]).find(Boolean) || null;
+
 function vPoules() {
   const imp = vImport();
   if (!D.pools.length) {
@@ -289,6 +328,13 @@ function vPoules() {
     const telTxt = tels.every(Boolean) ? `<span class="ok">✓ ${tels.map(fmtPhone).join(" · ")}</span>`
       : tels.some(Boolean) ? `<span class="ok">✓ ${fmtPhone(tels.find(Boolean))}</span>`
       : `<span class="ko">numéro manquant</span>`;
+    if (S.move === name) {
+      const cibles = D.pools.filter((x) => x.category === p.category && x.id !== p.id);
+      return `<div class="line"><div class="grow"><b>${esc(name)}</b><small>Changer de poule</small></div>
+        <select class="inline" id="moveTo">${cibles.map((x) => `<option value="${x.id}">${esc(x.nom)}</option>`).join("")}</select>
+        <div class="row"><button class="btn btn-sec" ${btnData("movX")}>Retour</button>
+        <button class="btn btn-ok" ${busy || !cibles.length ? "disabled" : ""} ${btnData("movOk", name)}>DÉPLACER</button></div></div>`;
+    }
     if (S.rename === name) {
       return `<div class="line"><input id="renameInput" value="${esc(name)}" class="inline">
         <div class="row"><button class="btn btn-sec" ${btnData("renX")}>Retour</button>
@@ -297,7 +343,8 @@ function vPoules() {
     const locked = nReq > 0;
     return `<div class="line"><div class="grow"><b>${esc(name)}</b><small>${telTxt}${locked ? ` · ${nReq} demande${nReq > 1 ? "s" : ""}` : ""}</small></div>
       ${locked ? `<span class="lock" title="Des demandes existent">🔒</span>`
-        : `<button class="icon" ${btnData("ren", name)} aria-label="Renommer">✏️</button>
+        : `<button class="icon" ${btnData("mov", name)} aria-label="Changer de poule" title="Changer de poule">↔</button>
+           <button class="icon" ${btnData("ren", name)} aria-label="Renommer">✏️</button>
            <button class="icon" ${btnData("del", name)} aria-label="Supprimer">🗑</button>`}</div>`;
   }).join("");
   const r = S.report;
@@ -316,6 +363,7 @@ function vPoules() {
       <p class="hint">Un ${mixte ? "binôme" : "joueur"} par ligne. Numéro facultatif après « ; »${mixte ? " (un par joueur)" : ""}.</p>
       <button class="cta" ${busy ? "disabled" : ""} ${btnData("addEntries")}>AJOUTER</button>
     </div>
+    ${vNotifPoule(p, list)}
     ${vFixtures(p, list)}
     ${poolLocked ? "" : `<button class="toggle danger" ${btnData("delPool", p.id)}>Supprimer ${esc(p.nom)}</button>`}`;
 }
@@ -507,7 +555,75 @@ function vResultats() {
     ${list.length ? list.map((r) => resultCard(r, S.resTab)).join("") : `<div class="empty">${empty}</div>`}`;
 }
 
-const SECTIONS = [["demandes", "Demandes"], ["resultats", "Résultats"], ["poules", "Poules"], ["creneaux", "Créneaux"], ["numeros", "Numéros"]];
+/* ---------- Suivi ---------- */
+function etatPoule(p) {
+  const entries = D.entries[p.id] || [];
+  const fx = fixturesDe(p.id).filter((f) => !f.exempt);
+  const reqs = requests.filter((r) => r.pool === p.nom);
+  const actif = (a, b) => reqs.find((r) => !["refused", "cancelled"].includes(r.status) &&
+    ((r.player === a && r.opponent === b) || (r.player === b && r.opponent === a)));
+
+  // Rencontres attendues : tableau si des affiches existent, sinon tous contre tous
+  let duels = [];
+  if (fx.length) duels = fx.map((f) => ({ a: f.e1, b: f.e2, label: `${f.l1 || "?"} – ${f.l2 || "?"}`, round: f.round }));
+  else for (let i = 0; i < entries.length; i++)
+    for (let j = i + 1; j < entries.length; j++) duels.push({ a: entries[i], b: entries[j], label: `${entries[i]} – ${entries[j]}` });
+
+  const lignes = duels.map((d) => {
+    const r = d.a && d.b ? actif(d.a, d.b) : null;
+    let etat = "organiser";
+    if (!d.a || !d.b) etat = "attente";
+    else if (r?.validated) etat = "joue";
+    else if (r?.scored) etat = "score";
+    else if (r?.status === "confirmed") etat = "confirme";
+    else if (r?.status === "pending") etat = "demande";
+    return { ...d, r, etat };
+  });
+  const n = (e) => lignes.filter((l) => l.etat === e).length;
+  return { total: lignes.length, lignes, joue: n("joue"), score: n("score"), confirme: n("confirme"),
+    demande: n("demande"), organiser: n("organiser"), attente: n("attente") };
+}
+
+const ETATS = {
+  joue: ["✅", "Terminé", "b-ok"], score: ["🏆", "Score à valider", "b-wait"],
+  confirme: ["🟢", "Programmé", "b-conf"], demande: ["🟠", "Demande à valider", "b-wait"],
+  organiser: ["⚪", "À organiser", "b-full"], attente: ["⏳", "Adversaire à désigner", "b-grey"],
+};
+
+function vSuivi() {
+  const stats = D.pools.map((p) => ({ p, e: etatPoule(p) })).filter((x) => x.e.total);
+  const tot = stats.reduce((a, x) => a + x.e.total, 0);
+  const faits = stats.reduce((a, x) => a + x.e.joue, 0);
+  const pct = tot ? Math.round((faits / tot) * 100) : 0;
+  if (!stats.length) return `<div class="empty">Ajoutez des joueurs dans les poules pour suivre l'avancement.</div>`;
+  return `<div class="bigstat">
+      <b>${faits} / ${tot}</b><span>match${tot > 1 ? "s" : ""} joué${faits > 1 ? "s" : ""} et validé${faits > 1 ? "s" : ""}</span>
+      <div class="bar"><i style="width:${pct}%"></i></div><small>${pct} % du tournoi</small>
+    </div>
+    ${stats.map(({ p, e }) => {
+      const pc = Math.round((e.joue / e.total) * 100);
+      const ouvert = S.suiviOpen === p.id;
+      const restantes = e.lignes.filter((l) => l.etat !== "joue");
+      return `<div class="card ${e.joue === e.total ? "confirmed" : ""}" style="border-left-color:${e.joue === e.total ? "var(--green)" : "var(--electric)"}">
+        <div class="top"><div class="players">${esc(p.nom)}<i>${e.joue} / ${e.total} match${e.total > 1 ? "s" : ""} joué${e.joue > 1 ? "s" : ""}</i></div>
+          <span class="badge ${e.joue === e.total ? "b-ok" : "b-conf"}">${pc} %</span></div>
+        <div class="bar small"><i style="width:${pc}%"></i></div>
+        <div class="tags">${["score", "confirme", "demande", "organiser", "attente"]
+          .filter((k) => e[k]).map((k) => `<span class="tag">${ETATS[k][0]} ${e[k]} ${ETATS[k][1].toLowerCase()}</span>`).join("")}</div>
+        <div class="row"><button class="btn btn-sec" ${btnData("suivi", p.id)}>${ouvert ? "Masquer le détail" : restantes.length === 1 ? "Voir le match restant" : `Voir les ${restantes.length} matchs restants`}</button></div>
+        ${ouvert ? `<div class="list" style="margin-top:10px">${
+          (restantes.length ? restantes : e.lignes).map((l) => {
+            const [ic, lib, cls] = ETATS[l.etat];
+            const quand = l.r && l.r.status === "confirmed" ? ` · ${fmtShort(l.r.date)} ${fmtTime(l.r.time)}${l.r.court ? `, ${esc(l.r.court)}` : ""}`
+              : l.r && l.r.status === "pending" ? ` · demandé ${fmtShort(l.r.date)} ${fmtTime(l.r.time)}` : "";
+            const score = l.r?.validated ? ` · ${esc(fmtScore(l.r.score, l.r.result_type))}` : "";
+            return `<div class="line"><div class="grow"><b>${esc(l.label)}</b><small>${ic} ${lib}${quand}${score}${l.round ? ` · tour ${l.round}` : ""}</small></div></div>`;
+          }).join("")}</div>` : ""}
+      </div>`;
+    }).join("")}`;
+}
+
+const SECTIONS = [["demandes", "Demandes"], ["suivi", "Suivi"], ["resultats", "Résultats"], ["poules", "Poules"], ["creneaux", "Créneaux"], ["numeros", "Numéros"]];
 function vAdmin() {
   const pend = requests.filter((r) => r.status === "pending").length;
   const scores = requests.filter((r) => joue(r) && r.scored && !r.validated).length;
@@ -515,7 +631,7 @@ function vAdmin() {
   const nav = `<nav class="nav">${SECTIONS.map(([k, l]) =>
     `<button class="${S.section === k ? "on" : ""}" ${btnData("section", k)}>${l}${badges[k] ? ` <i>${badges[k]}</i>` : ""}</button>`).join("")}</nav>`;
   const alerts = `${S.err ? `<div class="err">${esc(S.err)}</div>` : ""}${S.section !== "demandes" && S.msg ? `<div class="info">${S.msg}</div>` : ""}`;
-  const views = { demandes: vDemandes, resultats: vResultats, poules: vPoules, creneaux: vCreneaux, numeros: vNumeros };
+  const views = { demandes: vDemandes, suivi: vSuivi, resultats: vResultats, poules: vPoules, creneaux: vCreneaux, numeros: vNumeros };
   return nav + alerts + views[S.section]();
 }
 
@@ -536,6 +652,8 @@ function render() {
     const rp = document.getElementById("impReplace");
     if (rp) S.imp.replace = rp.checked;
   }
+  const nn = document.getElementById("notifNew");
+  if (nn) S.notifNew = nn.value;
   const fxA = document.getElementById("fxA"), fxB = document.getElementById("fxB"), fxR = document.getElementById("fxRound");
   if (fxA) { S.fxA = fxA.value; S.fxB = fxB.value; S.fxRound = Number(fxR.value) || 1; }
   let body;
@@ -545,7 +663,7 @@ function render() {
   app.innerHTML = header("Administration") + `<main>${body}</main>` + `<div class="ball" aria-hidden="true"></div>`;
 }
 
-const keep = ["court", "reason", "wa", "pool", "ren", "renX", "cf", "past", "day", "daysPreset", "sel", "selDay", "slotMode", "fixType", "fixWin", "fix", "resTab"];
+const keep = ["court", "reason", "wa", "pool", "ren", "renX", "mov", "movX", "cf", "past", "day", "daysPreset", "sel", "selDay", "slotMode", "fixType", "fixWin", "fix", "resTab", "notifWa", "notifOpen", "suivi"];
 onAction(async (act, v, e) => {
   if (!keep.includes(act)) { S.msg = null; S.msgId = null; S.err = null; }
   switch (act) {
@@ -632,7 +750,7 @@ onAction(async (act, v, e) => {
     }
 
     /* Poules */
-    case "pool": S.pool = v; S.report = null; S.rename = null; S.poolText = ""; break;
+    case "pool": S.pool = v; S.report = null; S.rename = null; S.move = null; S.poolText = ""; S.notifOpen = false; S.notifNew = ""; S.notified = new Set(); break;
     case "addEntries": {
       S.poolText = document.getElementById("poolText").value;
       const r = await manage({ action: "entry_add", poolId: S.pool, text: S.poolText });
@@ -652,6 +770,23 @@ onAction(async (act, v, e) => {
     case "fxDel":
       if (!window.confirm("Supprimer cette rencontre ?")) return;
       return manage({ action: "fixture_delete", id: v }, "Rencontre supprimée.");
+    case "notifOpen": S.notifOpen = true; S.notified = new Set(); break;
+    case "notifX": S.notifOpen = false; break;
+    case "notifWa": {
+      const sel = document.getElementById("notifNew");
+      if (sel) S.notifNew = sel.value;
+      S.notified.add(v);
+      break; // le lien s'ouvre normalement, on note juste l'envoi
+    }
+    case "mov": S.move = v; S.rename = null; S.report = null; break;
+    case "movX": S.move = null; break;
+    case "movOk": {
+      const to = document.getElementById("moveTo").value;
+      const r = await manage({ action: "entry_move", poolId: S.pool, name: v, toPoolId: to },
+        (x) => `↔ ${esc(v)} déplacé vers ${esc(x.to)}.`);
+      if (r) { S.move = null; render(); }
+      return;
+    }
     case "ren": S.rename = v; S.report = null; break;
     case "renX": S.rename = null; break;
     case "renOk": {
@@ -732,6 +867,7 @@ onAction(async (act, v, e) => {
     case "past": S.showPast = !S.showPast; break;
 
     /* Résultats */
+    case "suivi": S.suiviOpen = S.suiviOpen === v ? null : v; break;
     case "resTab": S.resTab = v; S.fix = null; break;
     case "fix": {
       const r = requests.find((x) => x.id === v);
@@ -786,6 +922,12 @@ const onBatch = (e) => {
 };
 document.addEventListener("input", onBatch);
 document.addEventListener("change", onBatch);
+document.addEventListener("change", (e) => {
+  if (e.target.id !== "notifNew") return;
+  S.notifNew = e.target.value;
+  S.notified = new Set();
+  render();
+});
 
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Enter") return;

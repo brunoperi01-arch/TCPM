@@ -232,6 +232,28 @@ const handlers = {
     return {};
   },
 
+  // Changement de poule (MOJA : montée, descente, repêchage)
+  async entry_move(db, b) {
+    const source = await getPool(db, b.poolId);
+    const cible = await getPool(db, b.toPoolId);
+    if (source.id === cible.id) return {};
+    if (source.category !== cible.category)
+      throw new HttpError(400, "Le changement n'est possible qu'à l'intérieur d'une même catégorie.");
+    const name = clean(b.name);
+    const { rows } = await db.query(
+      `SELECT 1 FROM pool_entries WHERE pool_id = $1 AND name = $2`, [source.id, name]);
+    if (!rows.length) throw new HttpError(404, "Nom introuvable dans cette poule.");
+    if (await hasRequests(db, "pool = $1 AND (player = $2 OR opponent = $2)", [source.nom, name]))
+      throw new HttpError(409, "Impossible : des demandes existent déjà pour ce joueur dans cette poule.");
+    const { rows: dejaLa } = await db.query(
+      `SELECT 1 FROM pool_entries WHERE pool_id = $1 AND name = $2`, [cible.id, name]);
+    if (dejaLa.length) throw new HttpError(409, `${name} est déjà dans ${cible.nom}.`);
+
+    await db.query(`DELETE FROM fixtures WHERE pool_id = $1 AND (entry1 = $2 OR entry2 = $2)`, [source.id, name]);
+    await db.query(`UPDATE pool_entries SET pool_id = $3 WHERE pool_id = $1 AND name = $2`, [source.id, name, cible.id]);
+    return { to: cible.nom };
+  },
+
   async entry_delete(db, b) {
     const poule = await getPool(db, b.poolId);
     const name = clean(b.name);

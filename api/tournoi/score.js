@@ -1,6 +1,6 @@
 // POST /api/tournoi/score — saisie du score par un des deux joueurs
 import { sql, sendError, HttpError, body } from "../_lib/db.js";
-import { analyseScore, nowParis, finCreneau } from "../../tournoi-interne/assets/config.js";
+import { analyseScore, nowParis } from "../../tournoi-interne/assets/config.js";
 
 const UUID = /^[0-9a-f-]{36}$/i;
 
@@ -24,8 +24,8 @@ export default async function handler(req, res) {
     if (!m) throw new HttpError(404, "Match introuvable.");
     if (m.status !== "confirmed") throw new HttpError(409, "Ce match n'est pas confirmé.");
     if (m.validated_at) throw new HttpError(409, "Score déjà validé par le club. Contactez le juge-arbitre.");
-    if (`${m.date} ${finCreneau(m.time, m.duration)}` > nowParis())
-      throw new HttpError(409, "Le match n'est pas encore terminé.");
+    if (`${m.date} ${m.time}` > nowParis())
+      throw new HttpError(409, "Le match n'a pas encore commencé.");
 
     const type = ["normal", "wo", "retired"].includes(b.type) ? b.type : "normal";
     const winner = b.winner === 1 || b.winner === 2 ? b.winner : null;

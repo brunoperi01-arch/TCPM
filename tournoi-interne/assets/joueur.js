@@ -30,7 +30,8 @@ function adversaires(poolId, moi) {
   }
   return { libre: false, liste, attentes, exempt: miennes.some((f) => f.exempt) };
 }
-const termine = (r) => `${r.date} ${finDe(r.date, r.time)}` <= nowParis();
+// Saisie du score possible dès le début du créneau
+const termine = (r) => `${r.date} ${r.time}` <= nowParis();
 const finDe = (date, time) => finCreneau(time, DATA.creneaux.find((c) => c.date === date && c.time === time)?.duration);
 let loaded = false, loadError = null;
 

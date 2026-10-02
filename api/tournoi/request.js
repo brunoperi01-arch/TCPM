@@ -3,7 +3,7 @@
 import { withTx, sendError, HttpError, body } from "../_lib/db.js";
 import { loadData, fromClient, contactOf, findPool, fixturesOf, fixtureExists } from "../_lib/data.js";
 import {
-  estAVenir, clean, normPhone, slotState, DATE_RE, TIME_RE,
+  estAVenir, clean, normPhone, slotState, DATE_RE, TIME_RE, erreurHoraire,
 } from "../../tournoi-interne/assets/config.js";
 
 export default async function handler(req, res) {
@@ -39,6 +39,14 @@ export default async function handler(req, res) {
       if (!creneau) throw new HttpError(400, "Ce créneau n'est plus proposé.");
       if (!estAVenir(creneau)) throw new HttpError(400, "Ce créneau est passé.");
 
+      // Horaire souhaité différent du créneau (facultatif) : le club tranchera
+      let souhaite = null;
+      if (b.preferred) {
+        souhaite = String(b.preferred).slice(0, 5);
+        const err = erreurHoraire(souhaite, creneau);
+        if (err) throw new HttpError(400, err);
+      }
+
       const phone1 = contactOf(data.contacts, player) || normPhone(b.phone1);
       const phone2 = contactOf(data.contacts, opponent) || normPhone(b.phone2);
       if (!phone1) throw new HttpError(400, "Indiquez votre numéro de portable (06 ou 07).");
@@ -68,10 +76,12 @@ export default async function handler(req, res) {
 
       const { rows } = await db.query(
         `INSERT INTO match_requests
-           (category, pool, player, opponent, requested_date, requested_time, phone1, phone2)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+           (category, pool, player, opponent, requested_date, requested_time,
+            phone1, phone2, preferred_time, duration_min)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
          RETURNING id`,
-        [poule.category, poule.nom, player, opponent, creneau.date, creneau.time, phone1, phone2]);
+        [poule.category, poule.nom, player, opponent, creneau.date, creneau.time,
+         phone1, phone2, souhaite, creneau.duration ?? 120]);
       return rows[0].id;
     });
 

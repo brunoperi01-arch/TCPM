@@ -1,14 +1,14 @@
 // POST /api/admin/action — valider, refuser, annuler, marquer « prévenu »
 import { withTx, sql, ADMIN_COLS, sendError, HttpError, body } from "../_lib/db.js";
 import { requireAdmin } from "../_lib/auth.js";
-import { TERRAINS, MOTIFS, analyseScore } from "../../tournoi-interne/assets/config.js";
+import { TERRAINS, MOTIFS, analyseScore, chevauche, joueursDe, TIME_RE } from "../../tournoi-interne/assets/config.js";
 
 const UUID = /^[0-9a-f-]{36}$/i;
 
 export default async function handler(req, res) {
   if (!requireAdmin(req, res)) return;
   if (req.method !== "POST") return res.status(405).json({ error: "Méthode non autorisée" });
-  const { action, id, court, reason, side } = body(req);
+  const { action, id, court, reason, side, time } = body(req);
   if (!UUID.test(String(id))) return res.status(400).json({ error: "Demande inconnue." });
 
   try {
@@ -16,29 +16,61 @@ export default async function handler(req, res) {
       if (!TERRAINS.includes(court)) throw new HttpError(400, "Terrain inconnu.");
       await withTx(async (db) => {
         const { rows } = await db.query(
-          `SELECT status, to_char(requested_date, 'YYYY-MM-DD') AS date,
-                  to_char(requested_time, 'HH24:MI') AS time
+          `SELECT status, player, opponent,
+                  to_char(requested_date, 'YYYY-MM-DD') AS date,
+                  to_char(requested_time, 'HH24:MI') AS time,
+                  to_char(preferred_time, 'HH24:MI') AS preferred,
+                  COALESCE(duration_min, 120)::int AS duration
            FROM match_requests WHERE id = $1 FOR UPDATE`, [id]);
         const r = rows[0];
         if (!r) throw new HttpError(404, "Demande introuvable.");
         if (r.status !== "pending") throw new HttpError(409, "Cette demande a déjà été traitée.");
 
-        await db.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`${r.date} ${r.time}`]);
+        // Horaire retenu : celui du créneau, ou l'horaire souhaité par les joueurs
+        const heure = time && TIME_RE.test(String(time)) ? String(time).slice(0, 5) : r.time;
+        const ajuste = heure !== r.time;
+        if (ajuste && heure !== r.preferred)
+          throw new HttpError(400, "Cet horaire n'a pas été demandé par les joueurs.");
 
-        const { rows: c } = await db.query(
-          `SELECT count(*)::int AS n,
-                  (SELECT capacity FROM tournament_slots
-                   WHERE slot_date = $1 AND slot_time = $2) AS cap
+        // Verrou sur la journée entière : deux validations simultanées sont traitées l'une après l'autre
+        await db.query("SELECT pg_advisory_xact_lock(hashtext($1))", [r.date]);
+
+        const { rows: jour } = await db.query(
+          `SELECT player, opponent, court,
+                  to_char(requested_time, 'HH24:MI') AS time,
+                  COALESCE(duration_min, 120)::int AS duration
            FROM match_requests
-           WHERE requested_date = $1 AND requested_time = $2 AND status = 'confirmed'`, [r.date, r.time]);
-        if (c[0].n >= (c[0].cap ?? 0))
-          throw new HttpError(409, "Créneau complet : validation impossible.");
+           WHERE requested_date = $1 AND status = 'confirmed' AND id <> $2`, [r.date, id]);
+
+        const moi = { date: r.date, time: heure, duration: r.duration };
+        const croise = jour.filter((x) => chevauche({ ...x, date: r.date }, moi));
+
+        if (croise.some((x) => x.court === court))
+          throw new HttpError(409, `${court} est déjà pris sur cet horaire.`);
+
+        const siens = new Set([...joueursDe(r.player), ...joueursDe(r.opponent)]);
+        if (croise.some((x) => [...joueursDe(x.player), ...joueursDe(x.opponent)].some((n) => siens.has(n))))
+          throw new HttpError(409, "Un des joueurs a déjà un match sur cet horaire.");
+
+        if (ajuste) {
+          if (croise.length >= TERRAINS.length)
+            throw new HttpError(409, "Tous les terrains sont occupés sur cet horaire.");
+        } else {
+          const { rows: c } = await db.query(
+            `SELECT count(*)::int AS n,
+                    (SELECT capacity FROM tournament_slots
+                     WHERE slot_date = $1 AND slot_time = $2) AS cap
+             FROM match_requests
+             WHERE requested_date = $1 AND requested_time = $2 AND status = 'confirmed'`, [r.date, r.time]);
+          if (c[0].n >= (c[0].cap ?? 0))
+            throw new HttpError(409, "Créneau complet : validation impossible.");
+        }
 
         await db.query(
           `UPDATE match_requests
-           SET status = 'confirmed', court = $2, decided_at = now(),
+           SET status = 'confirmed', court = $2, requested_time = $3, decided_at = now(),
                notified1_at = NULL, notified2_at = NULL
-           WHERE id = $1`, [id, court]);
+           WHERE id = $1`, [id, court, heure]);
       });
     } else if (action === "refuse") {
       const motif = MOTIFS.includes(reason) ? reason : null;
@@ -90,7 +122,8 @@ export default async function handler(req, res) {
     const rows = await sql.query(`SELECT ${ADMIN_COLS} FROM match_requests WHERE id = $1`, [id]);
     return res.status(200).json({ ok: true, request: rows[0] });
   } catch (err) {
-    if (err.code === "23505") return res.status(409).json({ error: `${court} est déjà pris sur ce créneau.` });
+    if (err.code === "23505" || err.code === "23P01")
+      return res.status(409).json({ error: `${court} est déjà pris sur cet horaire.` });
     return sendError(res, err);
   }
 }

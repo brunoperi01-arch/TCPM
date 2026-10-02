@@ -15,7 +15,7 @@ export default async function handler(req, res) {
       `SELECT r.id, r.status, r.player, r.opponent, r.validated_at,
               to_char(r.requested_date, 'YYYY-MM-DD') AS date,
               to_char(r.requested_time, 'HH24:MI') AS time,
-              COALESCE(s.duration_min, 120) AS duration
+              COALESCE(r.duration_min, s.duration_min, 120) AS duration
        FROM match_requests r
        LEFT JOIN tournament_slots s
          ON s.slot_date = r.requested_date AND s.slot_time = r.requested_time

@@ -85,6 +85,24 @@ export const fromMin = (n) => `${String(Math.floor(n / 60)).padStart(2, "0")}:${
 export const finCreneau = (time, duration = DEFAULT_DURATION) => fromMin(toMin(time) + Number(duration || DEFAULT_DURATION));
 export const fmtDuree = (min) => `${Math.floor(min / 60)}h${min % 60 ? String(min % 60).padStart(2, "0") : ""}`;
 /** Deux créneaux du même jour se chevauchent-ils ? */
+export const ECART_MAX = 120;      // écart autorisé avec le créneau, en minutes
+export const HEURE_MIN = "07:00";  // pas de match avant
+export const HEURE_MAX = "23:00";  // fin du dernier match au plus tard
+
+/** Vérifie un horaire souhaité. Renvoie un message d'erreur ou null. */
+export function erreurHoraire(souhaite, creneau) {
+  if (!TIME_RE.test(souhaite || "")) return "Horaire invalide.";
+  const d = Math.abs(toMin(souhaite) - toMin(creneau.time));
+  if (d === 0) return "Cet horaire est déjà celui du créneau.";
+  if (d > ECART_MAX) return `Au maximum ${fmtDuree(ECART_MAX)} d'écart avec le créneau.`;
+  if (toMin(souhaite) < toMin(HEURE_MIN)) return `Pas de match avant ${fmtTimeFr(HEURE_MIN)}.`;
+  if (toMin(souhaite) + (creneau.duration || DEFAULT_DURATION) > toMin(HEURE_MAX))
+    return `Le match doit se terminer avant ${fmtTimeFr(HEURE_MAX)}.`;
+  return null;
+}
+export const fmtTimeFr = (t) => String(t).replace(":", "h");
+
+/** Deux matchs (date, time, duration) se chevauchent-ils ? */
 export const chevauche = (a, b) => a.date === b.date &&
   toMin(a.time) < toMin(b.time) + (b.duration || DEFAULT_DURATION) &&
   toMin(b.time) < toMin(a.time) + (a.duration || DEFAULT_DURATION);

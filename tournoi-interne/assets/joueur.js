@@ -2,12 +2,13 @@
 import {
   CATEGORIES, JAT_PHONE, FORM_URL, levelInfo, estAVenir, isActive, pairKey, slotState, normPhone,
   finCreneau, prenom, analyseScore, fmtScore, nowParis, resolveFixtures, libelleFixture,
+  erreurHoraire, ECART_MAX, fmtDuree,
 } from "./config.js";
 import { esc, btnData, fmtDay, fmtShort, fmtTime, header, matchCard, api, onAction } from "./ui.js";
 
 const app = document.getElementById("app");
 const fresh = () => ({ step: "cat", hist: [], cat: null, groupe: null, poule: null, player: null, opp: null,
-  slot: null, err: null, last: null, phone1: "", phone2: "", sending: false, q: "",
+  slot: null, err: null, last: null, phone1: "", phone2: "", sending: false, q: "", autreH: false, heure: "",
   score: null, sets: [["", ""], ["", ""], ["", ""]], scoreType: "normal", scoreWinner: null, scoreDone: null });
 let S = fresh();
 let DATA = { requests: [], known: [], pools: [], entries: {}, creneaux: [], fixtures: [] };
@@ -32,7 +33,8 @@ function adversaires(poolId, moi) {
 }
 // Saisie du score possible dès le début du créneau
 const termine = (r) => `${r.date} ${r.time}` <= nowParis();
-const finDe = (date, time) => finCreneau(time, DATA.creneaux.find((c) => c.date === date && c.time === time)?.duration);
+const finDe = (date, time, duration) =>
+  finCreneau(time, duration || DATA.creneaux.find((c) => c.date === date && c.time === time)?.duration);
 let loaded = false, loadError = null;
 
 async function load() {
@@ -144,7 +146,7 @@ function vOpp() {
     const r = findMatch(p.nom, S.player, e);
     let badge, small = "", dis = true;
     if (r && r.status === "confirmed") {
-      const quand = `${fmtShort(r.date)}, ${fmtTime(r.time)} – ${fmtTime(finDe(r.date, r.time))}`;
+      const quand = `${fmtShort(r.date)}, ${fmtTime(r.time)} – ${fmtTime(finDe(r.date, r.time, r.duration))}`;
       if (r.validated) {
         badge = `<span class="badge b-ok">✅ ${esc(fmtScore(r.score, r.result_type))}</span>`;
         small = `${quand} · résultat validé`;
@@ -161,7 +163,7 @@ function vOpp() {
       }
     } else if (r) {
       badge = `<span class="badge b-wait">Demande en attente</span>`;
-      small = `${fmtShort(r.date)} à ${fmtTime(r.time)}`;
+      small = `${fmtShort(r.date)} à ${fmtTime(r.time)}${r.preferred ? ` · ⏰ ${fmtTime(r.preferred)} souhaité` : ""}`;
     } else {
       dis = false; dispo++;
       const c = lastClosed(p.nom, S.player, e);
@@ -237,7 +239,7 @@ function vScore() {
   const r = S.score;
   const moi = S.player, lui = S.opp;
   const special = S.scoreType !== "normal";
-  return `<p class="q">Score du match</p><p class="sub">${fmtDay(r.date)}, ${fmtTime(r.time)} – ${fmtTime(finDe(r.date, r.time))}, ${esc(r.court)}</p>` +
+  return `<p class="q">Score du match</p><p class="sub">${fmtDay(r.date)}, ${fmtTime(r.time)} – ${fmtTime(finDe(r.date, r.time, r.duration))}, ${esc(r.court)}</p>` +
     matchCard(CATEGORIES[S.cat], r.pool, moi, lui, r.date, r.time, finDe(r.date, r.time)) +
     `<p class="ask-title">Jeux gagnés — ${esc(moi)} à gauche</p>
      ${special ? "" : [0, 1, 2].map(setRow).join("")}
@@ -275,7 +277,13 @@ function vRecap() {
   const p = getPoule(S.poule), c = S.slot, mixte = S.cat === "mixte";
   return `<p class="q">Vérifiez votre demande</p><p class="sub">Le terrain sera attribué par le club.</p>` +
     matchCard(CATEGORIES[S.cat], p.nom, S.player, S.opp, c.date, c.time, finCreneau(c.time, c.duration)) +
-    `<p class="ask-title">Prévenus sur WhatsApp à la confirmation</p>` +
+    `<label class="switch"><input type="checkbox" id="autreH" ${S.autreH ? "checked" : ""}>
+       <span>Cet horaire ne nous convient pas tout à fait</span></label>
+     ${S.autreH ? `<div class="field"><label for="heure">Horaire souhaité ce jour-là</label>
+       <input id="heure" type="time" step="900" value="${esc(S.heure || c.time)}">
+       <p class="hint">Jusqu'à ${fmtDuree(ECART_MAX)} avant ou après ${fmtTime(c.time)}.
+         Le club confirmera l'horaire définitif selon les terrains libres.</p></div>` : ""}
+     <p class="ask-title">Prévenus sur WhatsApp à la confirmation</p>` +
     contactField(1, S.player, mixte ? "Votre équipe" : "Vous") +
     contactField(2, S.opp, mixte ? "Équipe adverse" : "Votre adversaire") +
     `<p class="hint">Numéros utilisés uniquement pour le tournoi et supprimés à la fin.</p>
@@ -292,6 +300,8 @@ function vDone() {
   const r = S.last;
   return `<div class="done"><div class="check">✓</div>
     <h2>Demande envoyée au club</h2><p>Votre créneau doit maintenant être confirmé. Les deux joueurs seront prévenus sur WhatsApp.</p></div>` +
+    (r.preferred ? `<div class="info">⏰ Vous avez demandé <b>${fmtTime(r.preferred)}</b> au lieu de ${fmtTime(r.time)}.
+      Le club vous confirmera l'horaire définitif.</div>` : "") +
     matchCard(r.catLabel, r.pool, r.player, r.opponent, r.date, r.time, r.end) +
     waPartage(messageDemande(r), "💬 Prévenir mon adversaire sur WhatsApp") +
     `<p class="note">WhatsApp s'ouvre avec le message prêt : choisissez votre adversaire dans vos contacts.</p>
@@ -308,6 +318,15 @@ async function submit() {
     if (side === 1) S.phone1 = raw; else S.phone2 = raw;
     return raw;
   };
+  const cb = document.getElementById("autreH");
+  S.autreH = !!(cb && cb.checked);
+  let preferred = null;
+  if (S.autreH) {
+    S.heure = document.getElementById("heure").value;
+    preferred = S.heure;
+    const err = erreurHoraire(preferred, c);
+    if (err) { S.err = esc(err); return render(); }
+  }
   const phone1 = read(1, S.player), phone2 = read(2, S.opp);
   if (phone1 !== null && !normPhone(phone1)) { S.err = "Indiquez votre numéro de portable (06 ou 07)."; return render(); }
   if (phone2 !== null && !normPhone(phone2)) { S.err = `Indiquez le portable de ${esc(S.opp)} (06 ou 07).`; return render(); }
@@ -316,9 +335,9 @@ async function submit() {
   try {
     await api("/api/tournoi/request", { method: "POST", body: {
       poolId: p.id, player: S.player, opponent: S.opp, date: c.date, time: c.time,
-      phone1, phone2, website: document.getElementById("website")?.value || "",
+      phone1, phone2, preferred, website: document.getElementById("website")?.value || "",
     }});
-    S.last = { catLabel: CATEGORIES[S.cat], pool: p.nom, player: S.player, opponent: S.opp, date: c.date, time: c.time, end: finCreneau(c.time, c.duration) };
+    S.last = { catLabel: CATEGORIES[S.cat], pool: p.nom, player: S.player, opponent: S.opp, date: c.date, time: c.time, end: finCreneau(c.time, c.duration), preferred };
     S.hist = []; S.step = "done";
     load();
   } catch (e) {
@@ -362,6 +381,11 @@ async function submitScore() {
 
 /* ---------- Rendu ---------- */
 function render() {
+  if (S.step === "recap") {
+    const cb = document.getElementById("autreH"), h = document.getElementById("heure");
+    if (cb) S.autreH = cb.checked;
+    if (h) S.heure = h.value;
+  }
   if (S.step === "score") [0, 1, 2].forEach((i) => {
     const a = document.getElementById(`s${i}a`), b = document.getElementById(`s${i}b`);
     if (a && b) S.sets[i] = [a.value, b.value];
@@ -410,6 +434,13 @@ onAction((act, v) => {
     case "again": S = fresh(); render(); return window.scrollTo(0, 0);
     case "reload": loaded = false; render(); return load();
   }
+});
+
+document.addEventListener("change", (e) => {
+  if (e.target.id !== "autreH") return;
+  S.autreH = e.target.checked;
+  if (S.autreH && !S.heure) S.heure = S.slot?.time || "";
+  render();
 });
 
 document.addEventListener("input", (e) => {

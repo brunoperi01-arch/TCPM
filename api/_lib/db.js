@@ -38,6 +38,8 @@ export const PUBLIC_COLS = `id, category, pool, player, opponent,
   to_char(requested_date, 'YYYY-MM-DD') AS date,
   to_char(requested_time, 'HH24:MI') AS time,
   status, court, refusal_reason AS reason,
+  to_char(preferred_time, 'HH24:MI') AS preferred,
+  COALESCE(duration_min, 120)::int AS duration,
   score, result_type, winner_side,
   score_at IS NOT NULL AS scored, validated_at IS NOT NULL AS validated,
   reported_at IS NOT NULL AS reported`;

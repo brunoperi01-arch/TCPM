@@ -4,7 +4,7 @@
 import {
   CATEGORIES, TERRAINS, MOTIFS, FORM_URL, SIGNATURE, prenom, fmtPhone, joueursDe, estAVenir, levelInfo,
   DURATIONS, DEFAULT_DURATION, finCreneau, fmtDuree, joursEntre, heuresSerie, nowParis,
-  analyseScore, fmtScore, resolveFixtures, libelleFixture,
+  analyseScore, fmtScore, resolveFixtures, libelleFixture, chevauche,
 } from "./config.js";
 import { readXlsx, parseTableau, parseListe, construireImport } from "./moja.js";
 import { esc, btnData, fmtDay, fmtShort, fmtTime, header, api, onAction } from "./ui.js";
@@ -16,7 +16,7 @@ let D = { pools: [], entries: {}, slots: [], contacts: {}, fixtures: [] };
 const getPoule = (id) => D.pools.find((p) => p.id === id);
 let loaded = false, loadError = null, busy = false;
 let S = { section: "demandes", tab: "pending", val: null, court: null, refuse: null, refReason: null, cancel: null,
-  msg: null, msgId: null, err: null, pool: null, poolText: "", imp: null, impOpen: false, move: null,
+  valTime: null, msg: null, msgId: null, err: null, pool: null, poolText: "", imp: null, impOpen: false, move: null,
   notifOpen: false, notifNew: "", notified: new Set(),
   resTab: "avalider", suiviOpen: null, fxRound: 1, fxA: "", fxB: "", fix: null, fixSets: [["", ""], ["", ""], ["", ""]], fixType: "normal", fixWinner: null, rename: null, report: null,
   slotForm: { date: "", time: "18:00", capacity: 2, duration: DEFAULT_DURATION }, showPast: false, contactFilter: "missing",
@@ -24,10 +24,15 @@ let S = { section: "demandes", tab: "pending", val: null, court: null, refuse: n
   batch: { from: "", to: "", days: [1, 2, 3, 4, 5], start: "18:00", end: "22:00", duration: DEFAULT_DURATION, capacity: 2 } };
 const JOURS = [[1, "L"], [2, "M"], [3, "M"], [4, "J"], [5, "V"], [6, "S"], [0, "D"]];
 const slotOf = (date, time) => D.slots.find((x) => x.date === date && x.time === time);
-const finDe = (r) => finCreneau(r.time, slotOf(r.date, r.time)?.duration);
+const finDe = (r) => finCreneau(r.time, r.duration || slotOf(r.date, r.time)?.duration);
 const joue = (r) => r.status === "confirmed" && `${r.date} ${finDe(r)}` <= nowParis();
 const vainqueur = (r) => (r.winner_side === 1 ? r.player : r.winner_side === 2 ? r.opponent : "");
-const plage = (date, time) => `${fmtTime(time)} – ${fmtTime(finCreneau(time, slotOf(date, time)?.duration))}`;
+/** Matchs confirmés dont l'horaire croise la plage demandée */
+const croisent = (date, time, duration, sauf) => requests.filter((x) =>
+  x.status === "confirmed" && x.id !== sauf &&
+  chevauche({ date: x.date, time: x.time, duration: x.duration || DEFAULT_DURATION }, { date, time, duration }));
+const plage = (date, time, duration) =>
+  `${fmtTime(time)} – ${fmtTime(finCreneau(time, duration || slotOf(date, time)?.duration))}`;
 
 async function load() {
   try {
@@ -66,7 +71,7 @@ async function action(payload, okMsg) {
     const i = requests.findIndex((r) => r.id === request.id);
     if (i >= 0) requests[i] = request;
     if (okMsg) { S.msg = okMsg(request); S.msgId = request.id; }
-    S.val = S.court = S.refuse = S.refReason = S.cancel = S.fix = null;
+    S.val = S.court = S.valTime = S.refuse = S.refReason = S.cancel = S.fix = null;
   } catch (e) {
     S.err = e.message;
     await load();
@@ -83,7 +88,7 @@ const catLabel = (c) => CATEGORIES[c] ?? c;
 function waMessage(r, side) {
   const moi = side === 1 ? r.player : r.opponent;
   const lui = side === 1 ? r.opponent : r.player;
-  const fin = fmtTime(finCreneau(r.time, slotOf(r.date, r.time)?.duration));
+  const fin = fmtTime(finDe(r));
   const quand = `${fmtDay(r.date).toLowerCase()} de ${fmtTime(r.time)} à ${fin}`;
   let txt;
   if (r.status === "confirmed")
@@ -123,29 +128,48 @@ function card(r) {
       ${r.status === "refused" ? `<span class="badge b-full">Refusé</span>` : ""}
       ${r.status === "cancelled" ? `<span class="badge b-grey">Annulé</span>` : ""}</div>
     <div class="pool">${esc(r.pool)}</div>
-    <div class="when">${fmtDay(r.date)}, ${plage(r.date, r.time)}</div>
+    <div class="when">${fmtDay(r.date)}, ${plage(r.date, r.time, r.duration)}</div>
+    ${r.status === "confirmed" && r.preferred === r.time ? `<div class="pref">⏰ horaire ajusté à la demande des joueurs</div>` : ""}
     <div class="contact">${esc(prenom(r.player))} : ${fmtPhone(r.phone1)}, ${esc(prenom(r.opponent))} : ${fmtPhone(r.phone2)}</div>
     ${r.status === "refused" && r.reason ? `<div class="reason">Motif : ${esc(r.reason)}</div>` : ""}`;
 
   if (r.status === "pending") {
+    const dur = r.duration || DEFAULT_DURATION;
+    const horaires = r.preferred ? [r.time, r.preferred] : [r.time];
+    const choisi = horaires.includes(S.valTime) ? S.valTime : r.time;
+    const ajuste = choisi !== r.time;
+    const croise = croisent(r.date, choisi, dur, r.id);
+    const taken = croise.map((x) => x.court);
+    const complet = !ajuste && used.length >= cap;
+
     body = `<div class="fill">Créneau : ${used.length} / ${cap} matchs confirmés</div>`;
+    if (r.preferred)
+      body += `<div class="pref">⏰ Souhaitent plutôt ${fmtTime(r.preferred)} – ${fmtTime(finCreneau(r.preferred, dur))}</div>`;
+
     if (S.val === r.id) {
-      if (used.length >= cap) {
-        body += `<div class="err">Créneau complet. Refusez la demande ou attendez une annulation.</div>
-          <div class="row"><button class="btn btn-sec" ${btnData("valX")}>Retour</button></div>`;
+      const sel = horaires.length > 1
+        ? `<p class="ask">Horaire retenu</p><div class="timebar">` + horaires.map((h) =>
+            `<button class="${h === choisi ? "on" : ""}" ${btnData("valTime", h)}>${fmtTime(h)} – ${fmtTime(finCreneau(h, dur))}
+               <small>${h === r.time ? "créneau ouvert" : "souhaité par les joueurs"}</small></button>`).join("") + `</div>`
+        : "";
+      const retour = `<div class="row"><button class="btn btn-sec" ${btnData("valX")}>Retour</button></div>`;
+      if (complet) {
+        body += sel + `<div class="err">Créneau complet. Refusez la demande, attendez une annulation${r.preferred ? ", ou retenez l'horaire souhaité" : ""}.</div>` + retour;
+      } else if (taken.length >= TERRAINS.length) {
+        body += sel + `<div class="err">Tous les terrains sont occupés sur cet horaire.</div>` + retour;
       } else {
-        const taken = used.map((x) => x.court);
-        body += `<p class="ask">Choisissez le terrain</p><div class="courts">` +
+        body += sel + `<p class="ask">Choisissez le terrain</p><div class="courts">` +
           TERRAINS.map((t) => {
             const pris = taken.includes(t);
             return `<button class="court ${S.court === t ? "sel" : ""}" ${pris ? "disabled" : ""} ${btnData("court", t)}>${t.replace("Terrain ", "T")}<small>${pris ? "pris" : "libre"}</small></button>`;
           }).join("") + `</div>
+          ${ajuste ? `<p class="hint">Hors créneau ouvert : vérifiez que le court est bien libre à ${fmtTime(choisi)}.</p>` : ""}
           <div class="row"><button class="btn btn-sec" ${btnData("valX")}>Retour</button>
-          <button class="btn btn-ok" ${S.court && !busy ? "" : "disabled"} ${btnData("valOk", r.id)}>CONFIRMER</button></div>`;
+          <button class="btn btn-ok" ${S.court && !busy ? "" : "disabled"} ${btnData("valOk", r.id)}>CONFIRMER ${fmtTime(choisi)}</button></div>`;
       }
     } else if (S.refuse === r.id) {
       body += `<p class="ask">Motif du refus (facultatif)</p><div class="chips">` +
-        MOTIFS.map((m) => `<button class="chip ${S.refReason === m ? "sel" : ""}" ${btnData("reason", m)}>${m}</button>`).join("") +
+        MOTIFS.map((m) => `<button class="chip mode ${S.refReason === m ? "sel" : ""}" ${btnData("reason", m)}>${m}</button>`).join("") +
         `</div><div class="row"><button class="btn btn-sec" ${btnData("refX")}>Retour</button>
         <button class="btn btn-no" ${busy ? "disabled" : ""} ${btnData("refOk", r.id)}>REFUSER</button></div>`;
     } else {
@@ -663,18 +687,19 @@ function render() {
   app.innerHTML = header("Administration") + `<main>${body}</main>` + `<div class="ball" aria-hidden="true"></div>`;
 }
 
-const keep = ["court", "reason", "wa", "pool", "ren", "renX", "mov", "movX", "cf", "past", "day", "daysPreset", "sel", "selDay", "slotMode", "fixType", "fixWin", "fix", "resTab", "notifWa", "notifOpen", "suivi"];
+const keep = ["court", "reason", "wa", "pool", "ren", "renX", "mov", "movX", "cf", "past", "day", "daysPreset", "sel", "selDay", "slotMode", "fixType", "fixWin", "fix", "resTab", "notifWa", "notifOpen", "suivi", "valTime"];
 onAction(async (act, v, e) => {
   if (!keep.includes(act)) { S.msg = null; S.msgId = null; S.err = null; }
   switch (act) {
     case "reload": loaded = false; render(); return load();
     case "section": S.section = v; S.report = null; S.rename = null; break;
     case "tab": S.tab = v; S.val = S.refuse = S.cancel = null; break;
-    case "val": S.val = v; S.court = null; S.refuse = S.cancel = null; break;
-    case "valX": S.val = null; S.court = null; break;
+    case "valTime": S.valTime = v; S.court = null; break;
+    case "val": S.val = v; S.court = null; S.valTime = null; S.refuse = S.cancel = null; break;
+    case "valX": S.val = null; S.court = null; S.valTime = null; break;
     case "court": S.court = v; break;
-    case "valOk": return action({ action: "confirm", id: v, court: S.court },
-      (r) => `✅ Match confirmé : ${esc(r.player)} contre ${esc(r.opponent)}, ${esc(r.court)}.`);
+    case "valOk": return action({ action: "confirm", id: v, court: S.court, time: S.valTime },
+      (r) => `✅ Match confirmé : ${esc(r.player)} contre ${esc(r.opponent)}, ${fmtTime(r.time)}, ${esc(r.court)}.`);
     case "ref": S.refuse = v; S.refReason = null; S.val = S.cancel = null; break;
     case "refX": S.refuse = null; S.refReason = null; break;
     case "reason": S.refReason = S.refReason === v ? null : v; break;
